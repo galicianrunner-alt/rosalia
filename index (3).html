@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rosalía en Pontevedra</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{
+    --oro:#C8A84B; --oro-vivo:#F4D35E; --verde:#1D5C4A;
+    --verde-oscuro:#0E3328; --crema:#F5EFE0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;font-family:Georgia,serif;background:#1a1410;}
+  #app{height:100vh;display:flex;align-items:center;justify-content:center;}
+  #movil{width:100%;max-width:420px;height:100vh;max-height:880px;background:var(--verde-oscuro);position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .pantalla{position:absolute;inset:0;display:none;flex-direction:column;}
+  .pantalla.activa{display:flex;}
+
+  #bienvenida{background:radial-gradient(circle at 50% 30%,var(--verde) 0%,var(--verde-oscuro) 70%);justify-content:center;padding:40px 32px;text-align:center;overflow-y:auto;}
+  .hada{font-size:46px;color:var(--oro-vivo);text-shadow:0 0 20px rgba(244,211,94,.6);margin-bottom:6px;}
+  #bienvenida h1{font-size:50px;color:var(--crema);font-weight:normal;letter-spacing:1px;}
+  .subt{font-size:21px;color:var(--oro-vivo);font-style:italic;margin-bottom:28px;}
+  .intro{font-size:15px;color:rgba(245,239,224,.85);line-height:1.65;margin-bottom:16px;}
+  .btn-grande{margin-top:18px;width:100%;padding:16px;background:var(--oro);color:var(--verde-oscuro);border:none;border-radius:14px;font-size:16px;font-weight:bold;font-family:Georgia,serif;cursor:pointer;letter-spacing:.5px;}
+
+  .cabecera{padding:16px 20px 10px;display:flex;justify-content:space-between;align-items:center;background:var(--verde-oscuro);z-index:1000;}
+  .cab-titulo{color:var(--crema);font-size:16px;font-style:italic;}
+  .contador{background:var(--oro);color:var(--verde-oscuro);border-radius:12px;padding:3px 12px;font-size:13px;font-weight:bold;}
+  #mapa{flex:1;width:100%;background:var(--verde);}
+  .portal-icono{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--oro);color:var(--verde-oscuro);font-size:14px;border:2px solid var(--crema);box-shadow:0 2px 8px rgba(0,0,0,.5);transition:transform .3s,box-shadow .3s,background .3s;}
+  .portal-icono.cerca{background:var(--oro-vivo);transform:scale(1.4);box-shadow:0 0 0 6px rgba(244,211,94,.35),0 0 18px rgba(244,211,94,.9);}
+  .portal-icono.visitado{background:rgba(180,160,90,.45);color:rgba(14,51,40,.6);}
+  .usuario-punto{width:16px;height:16px;border-radius:50%;background:#5BBFFF;border:3px solid #fff;box-shadow:0 0 10px rgba(91,191,255,.9);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;}
+  .usuario-pulso{width:16px;height:16px;border-radius:50%;background:rgba(91,191,255,.4);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulso 2s infinite;}
+  @keyframes pulso{0%{transform:translate(-50%,-50%) scale(1);opacity:.8;}100%{transform:translate(-50%,-50%) scale(4);opacity:0;}}
+  .instruccion{color:rgba(245,239,224,.55);font-size:12px;text-align:center;padding:8px 16px 4px;font-style:italic;background:var(--verde-oscuro);}
+  .aviso{margin:6px 14px 14px;padding:14px 18px;background:var(--oro);border-radius:16px;display:flex;align-items:center;gap:12px;animation:aparecer .4s ease;}
+  .aviso-label{font-size:11px;color:var(--verde-oscuro);text-transform:uppercase;letter-spacing:1px;opacity:.7;}
+  .aviso-nombre{font-size:15px;color:var(--verde-oscuro);font-weight:bold;margin:2px 0;}
+  .aviso-dist{font-size:12px;color:var(--verde-oscuro);opacity:.7;}
+  .aviso-btn{padding:12px 22px;background:var(--verde-oscuro);color:var(--oro-vivo);border:none;border-radius:12px;font-size:15px;font-weight:bold;font-family:Georgia,serif;cursor:pointer;}
+  .aviso-vacio{margin:6px 14px 14px;padding:14px;background:rgba(245,239,224,.06);border-radius:16px;color:rgba(245,239,224,.5);font-size:13px;text-align:center;font-style:italic;border:1px dashed rgba(244,211,94,.2);}
+  @keyframes aparecer{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  .control-fila{display:flex;gap:8px;padding:0 14px 14px;background:var(--verde-oscuro);}
+  .btn-gps{flex:1;padding:11px;border-radius:10px;font-family:Georgia,serif;font-size:13px;cursor:pointer;border:1px solid var(--oro);background:transparent;color:var(--oro);}
+  .btn-gps.activo{background:var(--oro);color:var(--verde-oscuro);font-weight:bold;}
+
+  #pantalla-portal{background:radial-gradient(circle at 50% 0%,var(--verde) 0%,var(--verde-oscuro) 60%);overflow-y:auto;padding:28px 24px;}
+  .p-icono{font-size:32px;color:var(--oro-vivo);text-align:center;text-shadow:0 0 16px rgba(244,211,94,.6);}
+  .p-num{color:rgba(245,239,224,.4);font-size:12px;text-align:center;letter-spacing:2px;margin-top:4px;}
+  .p-lugar{color:var(--oro);font-size:13px;text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin:8px 0 4px;}
+  .p-nombre{color:var(--crema);font-size:23px;text-align:center;font-weight:normal;line-height:1.3;margin-bottom:24px;}
+  .video-box{background:rgba(0,0,0,.3);border-radius:16px;padding:32px 20px;text-align:center;margin-bottom:16px;border:1px solid rgba(244,211,94,.2);}
+  .video-marco{position:relative;width:100%;padding-bottom:56.25%;border-radius:16px;overflow:hidden;margin-bottom:16px;border:1px solid rgba(244,211,94,.3);background:#000;}
+  .video-marco iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}
+  .video-play{width:56px;height:56px;border-radius:50%;background:var(--oro);color:var(--verde-oscuro);font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+  .video-texto{color:var(--crema);font-size:15px;}
+  .video-nota{color:rgba(245,239,224,.5);font-size:12px;font-style:italic;margin-top:4px;}
+  .audio-box{background:rgba(244,211,94,.1);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+  .audio-play{width:40px;height:40px;border-radius:50%;background:var(--oro);color:var(--verde-oscuro);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .audio-titulo{color:var(--crema);font-size:14px;margin-bottom:8px;}
+  .audio-barra{height:4px;background:rgba(245,239,224,.2);border-radius:2px;overflow:hidden;}
+  .audio-progreso{width:35%;height:100%;background:var(--oro-vivo);}
+  .enigma-box{background:rgba(0,0,0,.25);border-left:3px solid var(--oro);border-radius:0 12px 12px 0;padding:16px 20px;margin-bottom:28px;}
+  .enigma-label{color:var(--oro);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;}
+  .enigma-texto{color:var(--crema);font-size:16px;font-style:italic;line-height:1.5;}
+  .btn-volver{width:100%;padding:14px;background:transparent;color:var(--oro);border:1px solid var(--oro);border-radius:12px;font-size:15px;font-family:Georgia,serif;cursor:pointer;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="app"><div id="movil">
+
+  <div id="bienvenida" class="pantalla activa">
+    <div class="hada">✦</div>
+    <h1>Rosalía</h1>
+    <p class="subt">en Pontevedra</p>
+    <p class="intro">Pontevedra tiene dos ciudades. La que conoces — piedra, plazas, soportales. Y la que no aparece en ningún mapa: la de los que tuvieron que callar, los que huyeron, los que grabaron sus caras en piedra para que nadie los olvidara.</p>
+    <p class="intro">Yo soy Rosalía. Voy a abrirte 23 puertas. No hace falta seguir ningún orden — ve a la que quieras, cuando quieras. ¿Estás listo para mirarte en ellas?</p>
+    <button class="btn-grande" onclick="irAMapa()">Comenzar el recorrido</button>
+  </div>
+
+  <div id="pantalla-mapa" class="pantalla">
+    <div class="cabecera">
+      <span class="cab-titulo">El mapa de los portales</span>
+      <span class="contador"><span id="visitados-n">0</span>/<span id="total-n">0</span></span>
+    </div>
+    <div id="mapa"></div>
+    <p class="instruccion" id="instruccion">Toca el mapa para moverte — simula caminar por la ciudad</p>
+    <div id="zona-aviso"></div>
+    <div class="control-fila">
+      <button class="btn-gps activo" id="btn-sim" onclick="modoSimulado()">✦ Modo simulación</button>
+      <button class="btn-gps" id="btn-gps" onclick="modoGPSReal()">◉ GPS real (en el móvil)</button>
+    </div>
+  </div>
+
+  <div id="pantalla-portal" class="pantalla">
+    <div class="p-icono">✦</div>
+    <p class="p-num" id="p-num"></p>
+    <p class="p-lugar" id="p-lugar"></p>
+    <h2 class="p-nombre" id="p-nombre"></h2>
+    <div id="video-zona"></div>
+    <div class="audio-box"><div class="audio-play">♪</div><div style="flex:1"><p class="audio-titulo">La reflexión de Rosalía</p><div class="audio-barra"><div class="audio-progreso"></div></div></div></div>
+    <div class="enigma-box"><p class="enigma-label">El enigma</p><p class="enigma-texto" id="p-enigma"></p></div>
+    <button class="btn-volver" onclick="volverAlMapa()">← Volver al mapa</button>
+  </div>
+
+</div></div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  TABLA DE PORTALES — EDITA AQUÍ LAS COORDENADAS                ║
+// ║  Sustituye lat y lng de cada portal por los valores reales     ║
+// ║  que captures en el recorrido. Formato: lat con punto decimal. ║
+// ║  Las coordenadas actuales son APROXIMADAS (a falta del paseo). ║
+// ╚══════════════════════════════════════════════════════════════╝
+const PORTALES = [
+  {id:1, lat:42.43083, lng:-8.64776, nombre:"El Portal del Tiempo Petrificado", lugar:"Ruinas de Santo Domingo", enigma:"Los muertos de esta ciudad eligieron ser enterrados aquí. Cuando el techo cayó y el cielo entró, ¿los liberó o los expuso?"},
+  {id:2, lat:42.43326, lng:-8.64720, nombre:"El Portal de los Navegantes", lugar:"Basílica de Santa María", enigma:"Estos hombres sufragaron algo que duraría siglos con el dinero de un día de pesca. ¿Qué estaban construyendo realmente — una iglesia o una promesa?"},
+  {id:3, lat:42.43300, lng:-8.64690, nombre:"El Portal de la Muralla Invisible", lugar:"O Campillo de Santa María", enigma:"¿Cuáles son los muros invisibles que tú mismo has construido para protegerte — y qué hay al otro lado?"},
+  {id:4, lat:42.43210, lng:-8.64560, nombre:"El Portal de lo Inexplicable", lugar:"Santuario de las Apariciones", enigma:"¿Has vivido tú alguna vez algo que no tiene explicación — y lo guardaste en silencio porque sabías que nadie te creería?"},
+  {id:5, lat:42.43160, lng:-8.64520, nombre:"El Portal de Tu Propia Leyenda", lugar:"Casa de Valle-Inclán", enigma:"¿Cuál es la versión de tu propia historia que más te gusta contar — y qué dice de ti que la hayas elegido?"},
+  {id:6, lat:42.43270, lng:-8.64450, nombre:"El Portal del Héroe que Llegó del Mar", lugar:"Plaza del Teucro", enigma:"¿Por qué recordamos las leyendas y olvidamos las vidas reales — y qué dice eso de lo que necesitamos creer?"},
+  {id:7, lat:42.43350, lng:-8.64400, nombre:"El Portal de las Peixeiras", lugar:"Mercado de Abastos", enigma:"¿Cuándo fue la última vez que estuviste completamente presente en algo tan sencillo como esto — sin pensar en lo que viene ni recordar lo que fue?"},
+  {id:8, lat:42.43240, lng:-8.64561, nombre:"El Portal de la Sirena", lugar:"Plaza de A Pedreira", enigma:"¿Qué hay en nosotros de mar — y qué hay de tierra? ¿Y qué ocurre cuando las dos partes se separan?"},
+  {id:9, lat:42.43180, lng:-8.64470, nombre:"El Portal de los Recuerdos", lugar:"Plaza de A Leña / Museo Provincial", enigma:"Castelao guardó la memoria de su pueblo desde el exilio, sabiendo que quizás no volvería. ¿Qué guardarías tú si supieras que te vas — y qué dejarías ir sin mirar atrás?"},
+  {id:10, lat:42.43130, lng:-8.64430, nombre:"El Portal de los Sabios Olvidados", lugar:"Iglesia de San Bartolomé", enigma:"¿Qué precio tiene el conocimiento que no se deja controlar — y cuánto estamos dispuestos a pagar por él?"},
+  {id:11, lat:42.43178, lng:-8.64483, nombre:"El Portal del Emperador", lugar:"Plaza de A Ferrería", enigma:"De todo lo que hizo en su vida, quizás esto es lo que más dura. ¿Qué pequeña cosa tuya podría durar más que tú?"},
+  {id:12, lat:42.43140, lng:-8.64520, nombre:"El Portal de la Fraternidad", lugar:"Iglesia de San Francisco", enigma:"¿Qué es el amor cuando no puede quedarse — y qué queda de él cuando todo lo demás se ha ido?"},
+  {id:13, lat:42.43113, lng:-8.64411, nombre:"El Portal del Cielo", lugar:"A Virxe Peregrina", enigma:"¿Cuántas veces hemos quedado mutilados por algo que no esperábamos — y cuánto tardamos en reconstruirnos?"},
+  {id:14, lat:42.43150, lng:-8.64450, nombre:"El Portal de la Tierra", lugar:"O Loro Ravachol", enigma:"Ravachol decía lo que nadie se atrevía a decir — en gallego, con retranca, sin pedir permiso. ¿Cuántas verdades guardas tú que no dices — y por qué?"},
+  {id:15, lat:42.43130, lng:-8.64500, nombre:"El Portal de la Noche Intelectual", lugar:"Calle Michelena / Cafés y Salones", enigma:"¿Qué se pierde cuando desaparecen los lugares donde la gente se reúne a pensar en voz alta — y qué hemos puesto en su lugar?"},
+  {id:16, lat:42.43230, lng:-8.64700, nombre:"El Portal del Último Pirata", lugar:"Casa das Campás / A Moureira", enigma:"¿Cuál es la diferencia entre valentía y desesperación — y cuándo cruzamos esa línea sin darnos cuenta?"},
+  {id:17, lat:42.43200, lng:-8.64620, nombre:"El Portal de los que Tuvieron que Callar", lugar:"Rúa Real", enigma:"¿Cuánto de lo que piensas no lo dices — y a qué le tienes miedo realmente?"},
+  {id:18, lat:42.43080, lng:-8.64380, nombre:"El Portal de los Iniciados", lugar:"Casona de los Fonseca / Paseo de Colón", enigma:"¿Cuántas puertas hay a tu alrededor que no has visto todavía — porque nadie te enseñó a mirarlas?"},
+  {id:19, lat:42.43310, lng:-8.64600, nombre:"El Portal de las que Resistieron", lugar:"Convento de Santa Clara", enigma:"¿Qué guardas tú detrás de tus propios muros — y qué florecería si los abrieras?"},
+  {id:20, lat:42.43420, lng:-8.64550, nombre:"El Portal del Río y el Puente", lugar:"Puente del Burgo", enigma:"¿Cuánto has cambiado desde que eras quien eras — y sigues siendo tú?"},
+  {id:21, lat:42.43160, lng:-8.64600, nombre:"El Portal de lo que Está Debajo", lugar:"Subsuelo de la ciudad vieja", enigma:"¿Qué llevas tú enterrado que todavía no has desenterrado — y tienes miedo de encontrarlo, o miedo de que ya no esté?"},
+  {id:22, lat:42.43450, lng:-8.64400, nombre:"El Portal de la Isla Prohibida", lugar:"Mirador a la ría — Isla de Tambo", enigma:"¿Tienes tú una isla así — un lugar interior al que nadie tiene acceso, donde guardas lo que no puedes mostrar?"},
+  {id:23, lat:42.43170, lng:-8.64430, nombre:"El Portal de los que Quisieron ser Recordados", lugar:"Casa de las Caras / Praza da Estrela", enigma:"¿Qué dejarías tú grabado que de verdad valiera la pena recordar — y para quién?"},
+];
+const RADIO=30;                  // metros de activación
+const CENTRO=[42.4322,-8.6458];  // centro del mapa al abrir
+// Vídeo de prueba (YouTube). En la app final, cada portal tendrá su
+// propio vídeo en Vimeo. Para cambiarlo, sustituye este identificador
+// por el de otro vídeo de YouTube (la parte que va tras "watch?v=").
+const VIDEO_PRUEBA="TnvGZoNpw4M";
+// ────────────────────────────────────────────────────────────────
+
+let mapa,usuarioMarker,portalMarkers={},posicion={lat:42.4322,lng:-8.6458};
+let visitados=new Set(),modoGPS=false,watchId=null;
+
+function distancia(la1,ln1,la2,ln2){
+  const R=6371000,tR=d=>d*Math.PI/180;
+  const dLa=tR(la2-la1),dLn=tR(ln2-ln1);
+  const a=Math.sin(dLa/2)**2+Math.cos(tR(la1))*Math.cos(tR(la2))*Math.sin(dLn/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function cargarLeaflet(cb){
+  if(window.L){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  s.onload=()=>cb();
+  s.onerror=()=>{
+    const s2=document.createElement('script');
+    s2.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s2.onload=()=>cb();
+    s2.onerror=()=>{document.getElementById('mapa').innerHTML='<p style="color:#F5EFE0;padding:30px;text-align:center;font-style:italic">No se pudo cargar el mapa. Comprueba tu conexión e inténtalo de nuevo.</p>';};
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+}
+
+function irAMapa(){
+  document.getElementById('bienvenida').classList.remove('activa');
+  document.getElementById('pantalla-mapa').classList.add('activa');
+  document.getElementById('total-n').textContent=PORTALES.length;
+  if(!mapa) cargarLeaflet(()=>setTimeout(initMapa,150));
+}
+
+function initMapa(){
+  mapa=L.map('mapa',{zoomControl:true,attributionControl:false}).setView(CENTRO,16);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(mapa);
+
+  PORTALES.forEach(p=>{
+    const icon=L.divIcon({className:'',html:`<div class="portal-icono" id="pico-${p.id}">✦</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+    const m=L.marker([p.lat,p.lng],{icon}).addTo(mapa);
+    m.on('click',()=>{const d=distancia(posicion.lat,posicion.lng,p.lat,p.lng); if(d<=RADIO) abrirPortal(p); else flashLejos(p,Math.round(d));});
+    portalMarkers[p.id]=m;
+  });
+
+  const uicon=L.divIcon({className:'',html:'<div class="usuario-icono"><div class="usuario-pulso"></div><div class="usuario-punto"></div></div>',iconSize:[16,16],iconAnchor:[8,8]});
+  usuarioMarker=L.marker([posicion.lat,posicion.lng],{icon:uicon,zIndexOffset:1000}).addTo(mapa);
+
+  mapa.on('click',e=>{ if(!modoGPS){ posicion={lat:e.latlng.lat,lng:e.latlng.lng}; actualizar(); }});
+  actualizar();
+}
+
+function actualizar(){
+  if(usuarioMarker) usuarioMarker.setLatLng([posicion.lat,posicion.lng]);
+  let cercano=null,minD=Infinity;
+  PORTALES.forEach(p=>{
+    const d=distancia(posicion.lat,posicion.lng,p.lat,p.lng);
+    const el=document.getElementById('pico-'+p.id);
+    if(el){el.classList.toggle('visitado',visitados.has(p.id));el.classList.toggle('cerca',d<=RADIO);}
+    if(d<=RADIO && d<minD){minD=d;cercano={...p,distancia:Math.round(d)};}
+  });
+  pintarAviso(cercano);
+  document.getElementById('visitados-n').textContent=visitados.size;
+}
+
+function pintarAviso(c){
+  const z=document.getElementById('zona-aviso');
+  if(c){z.innerHTML=`<div class="aviso"><div style="flex:1"><p class="aviso-label">Estás cerca de un portal</p><p class="aviso-nombre">${c.nombre}</p><p class="aviso-dist">a ${c.distancia} metros</p></div><button class="aviso-btn" onclick="abrirPortalId(${c.id})">Abrir</button></div>`;}
+  else{z.innerHTML=`<div class="aviso-vacio">Acércate a un punto dorado para activar su portal</div>`;}
+}
+function flashLejos(p,d){
+  const z=document.getElementById('zona-aviso');
+  z.innerHTML=`<div class="aviso-vacio">Estás a ${d} m de "${p.nombre}". Acércate a menos de ${RADIO} m.</div>`;
+  setTimeout(actualizar,2200);
+}
+function abrirPortalId(id){abrirPortal(PORTALES.find(p=>p.id===id));}
+function abrirPortal(p){
+  visitados.add(p.id);
+  document.getElementById('p-num').textContent='PORTAL '+String(p.id).padStart(2,'0');
+  document.getElementById('p-lugar').textContent=p.lugar;
+  document.getElementById('p-nombre').textContent=p.nombre;
+  document.getElementById('p-enigma').textContent=p.enigma;
+  // Vídeo incrustado (de prueba). En la app final sería el vídeo propio del portal.
+  const vid=p.video||VIDEO_PRUEBA;
+  document.getElementById('video-zona').innerHTML=
+    `<div class="video-marco"><iframe src="https://www.youtube.com/embed/${vid}?rel=0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>`;
+  document.getElementById('pantalla-mapa').classList.remove('activa');
+  document.getElementById('pantalla-portal').classList.add('activa');
+  document.getElementById('pantalla-portal').scrollTop=0;
+}
+function volverAlMapa(){
+  document.getElementById('video-zona').innerHTML=''; // detiene el vídeo
+  document.getElementById('pantalla-portal').classList.remove('activa');
+  document.getElementById('pantalla-mapa').classList.add('activa');
+  actualizar();
+}
+
+function modoSimulado(){
+  modoGPS=false;
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  document.getElementById('btn-sim').classList.add('activo');
+  document.getElementById('btn-gps').classList.remove('activo');
+  document.getElementById('instruccion').textContent='Toca el mapa para moverte — simula caminar por la ciudad';
+}
+function modoGPSReal(){
+  if(!navigator.geolocation){alert('Tu navegador no permite geolocalización.');return;}
+  modoGPS=true;
+  document.getElementById('btn-gps').classList.add('activo');
+  document.getElementById('btn-sim').classList.remove('activo');
+  document.getElementById('instruccion').textContent='Usando tu GPS real — camina por Pontevedra';
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{posicion={lat:pos.coords.latitude,lng:pos.coords.longitude};if(mapa)mapa.setView([posicion.lat,posicion.lng],17);actualizar();},
+    err=>{alert('No se pudo acceder al GPS. En el móvil, al aire libre, funcionará.');modoSimulado();},
+    {enableHighAccuracy:true,maximumAge:1000,timeout:10000}
+  );
+}
+</script>
+</body>
+</html>
