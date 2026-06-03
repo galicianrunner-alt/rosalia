@@ -144,7 +144,7 @@ const CENTRO=[42.4322,-8.6458];  // centro del mapa al abrir
 // Vídeo de prueba (YouTube). En la app final, cada portal tendrá su
 // propio vídeo en Vimeo. Para cambiarlo, sustituye este identificador
 // por el de otro vídeo de YouTube (la parte que va tras "watch?v=").
-const VIDEO_PRUEBA="mKiVt1O59rw";
+const VIDEO_PRUEBA="mKiVt1O5r9w";
 // ────────────────────────────────────────────────────────────────
 
 let mapa,usuarioMarker,portalMarkers={},posicion={lat:42.4322,lng:-8.6458};
@@ -230,7 +230,8 @@ function abrirPortal(p){
   // Vídeo incrustado (de prueba). En la app final sería el vídeo propio del portal.
   const vid=p.video||VIDEO_PRUEBA;
   document.getElementById('video-zona').innerHTML=
-    `<div class="video-marco"><iframe src="https://www.youtube.com/embed/${vid}?rel=0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>`;
+    `<div class="video-marco"><iframe src="https://www.youtube.com/embed/${vid}?rel=0&playsinline=1" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>
+     <p style="text-align:center;margin:-6px 0 16px"><a href="https://www.youtube.com/watch?v=${vid}" target="_blank" style="color:#C8A84B;font-size:13px;font-style:italic">Si el vídeo no carga, ábrelo aquí →</a></p>`;
   document.getElementById('pantalla-mapa').classList.remove('activa');
   document.getElementById('pantalla-portal').classList.add('activa');
   document.getElementById('pantalla-portal').scrollTop=0;
