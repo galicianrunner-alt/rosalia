@@ -75,7 +75,7 @@
   .conv-opcion:hover{background:rgba(244,211,94,.12);border-color:var(--oro);}
   .conv-opcion:disabled{opacity:.4;cursor:default;}
   .conv-opcion.elegida{background:rgba(244,211,94,.18);border-color:var(--oro-vivo);}
-  .conv-reaccion{color:var(--crema);font-size:15px;line-height:1.6;margin-top:14px;padding-top:14px;border-top:1px solid rgba(244,211,94,.2);max-height:260px;overflow-y:auto;animation:aparecer .5s ease;}
+  .conv-reaccion{color:var(--crema);font-size:16px;line-height:1.65;margin-top:16px;padding-top:16px;border-top:1px solid rgba(244,211,94,.2);animation:aparecer .5s ease;}
 </style>
 </head>
 <body>
@@ -124,29 +124,29 @@
 // ║  Las coordenadas actuales son APROXIMADAS (a falta del paseo). ║
 // ╚══════════════════════════════════════════════════════════════╝
 const PORTALES = [
-  {id:1, lat:42.431284, lng:-8.647121, nombre:"El Portal del Tiempo Petrificado", lugar:"Ruinas de Santo Domingo", enigma:"Los muertos de esta ciudad eligieron ser enterrados aquí. Cuando el techo cayó y el cielo entró, ¿los liberó o los expuso?"},
+  {id:1, lat:42.431264, lng:-8.647130, nombre:"El Portal del Tiempo Petrificado", lugar:"Ruinas de Santo Domingo", enigma:"Los muertos de esta ciudad eligieron ser enterrados aquí. Cuando el techo cayó y el cielo entró, ¿los liberó o los expuso?"},
   {id:2, lat:42.433650, lng:-8.647616, video:"8MKtspW0nTw", nombre:"El Portal de los Navegantes", lugar:"Basílica de Santa María", enigma:"Estos hombres sufragaron algo que duraría siglos con el dinero de un día de pesca. ¿Qué estaban construyendo realmente — una iglesia o una promesa?"},
   {id:3, lat:42.434118, lng:-8.647704, video:"u8B-meVXUzk", nombre:"El Portal de la Muralla Invisible", lugar:"O Campillo de Santa María", enigma:"¿Cuáles son los muros invisibles que tú mismo has construido para protegerte — y qué hay al otro lado?"},
   {id:4, lat:42.433797, lng:-8.646422, video:"MbwatdrzwIQ", nombre:"El Portal de lo Inexplicable", lugar:"Santuario de las Apariciones", enigma:"¿Has vivido tú alguna vez algo que no tiene explicación — y lo guardaste en silencio porque sabías que nadie te creería?"},
-  {id:5, lat:42.433640, lng:-8.646063, nombre:"El Portal de Tu Propia Leyenda", lugar:"Casa de Valle-Inclán", enigma:"¿Cuál es la versión de tu propia historia que más te gusta contar — y qué dice de ti que la hayas elegido?"},
+  {id:5, lat:42.433022, lng:-8.644323, nombre:"El Portal de Tu Propia Leyenda", lugar:"Casa de Valle-Inclán", enigma:"¿Cuál es la versión de tu propia historia que más te gusta contar — y qué dice de ti que la hayas elegido?"},
   {id:6, lat:42.432800, lng:-8.645503, video:"TQ8ExhUSAiU", nombre:"El Portal del Héroe que Llegó del Mar", lugar:"Plaza del Teucro", enigma:"¿Por qué recordamos las leyendas y olvidamos las vidas reales — y qué dice eso de lo que necesitamos creer?"},
-  {id:7, lat:42.434087, lng:-8.643379, nombre:"El Portal de las Peixeiras", lugar:"Mercado de Abastos", enigma:"¿Cuándo fue la última vez que estuviste completamente presente en algo tan sencillo como esto — sin pensar en lo que viene ni recordar lo que fue?"},
-  {id:8, lat:42.433526, lng:-8.643192, nombre:"El Portal de la Sirena", lugar:"Plaza de A Pedreira", enigma:"¿Qué hay en nosotros de mar — y qué hay de tierra? ¿Y qué ocurre cuando las dos partes se separan?"},
-  {id:9, lat:42.432663, lng:-8.643230, nombre:"El Portal de los Recuerdos", lugar:"Plaza de A Leña / Museo Provincial", enigma:"Castelao guardó la memoria de su pueblo desde el exilio, sabiendo que quizás no volvería. ¿Qué guardarías tú si supieras que te vas — y qué dejarías ir sin mirar atrás?"},
-  {id:10, lat:42.433143, lng:-8.642421, nombre:"El Portal de los Sabios Olvidados", lugar:"Iglesia de San Bartolomé", enigma:"¿Qué precio tiene el conocimiento que no se deja controlar — y cuánto estamos dispuestos a pagar por él?"},
-  {id:11, lat:42.431433, lng:-8.644324, nombre:"El Portal del Emperador", lugar:"Plaza de A Ferrería", enigma:"De todo lo que hizo en su vida, quizás esto es lo que más dura. ¿Qué pequeña cosa tuya podría durar más que tú?"},
-  {id:12, lat:42.431335, lng:-8.643143, nombre:"El Portal de la Fraternidad", lugar:"Iglesia de San Francisco", enigma:"¿Qué es el amor cuando no puede quedarse — y qué queda de él cuando todo lo demás se ha ido?"},
-  {id:13, lat:42.430808, lng:-8.643660, nombre:"El Portal del Cielo", lugar:"A Virxe Peregrina", enigma:"¿Cuántas veces hemos quedado mutilados por algo que no esperábamos — y cuánto tardamos en reconstruirnos?"},
-  {id:14, lat:42.430796, lng:-8.644315, nombre:"El Portal de la Tierra", lugar:"O Loro Ravachol", enigma:"Ravachol decía lo que nadie se atrevía a decir — en gallego, con retranca, sin pedir permiso. ¿Cuántas verdades guardas tú que no dices — y por qué?"},
-  {id:15, lat:42.431096, lng:-8.645207, nombre:"El Portal de la Noche Intelectual", lugar:"Calle Michelena / Cafés y Salones", enigma:"¿Qué se pierde cuando desaparecen los lugares donde la gente se reúne a pensar en voz alta — y qué hemos puesto en su lugar?"},
-  {id:16, lat:42.432308, lng:-8.646215, nombre:"El Portal del Último Pirata", lugar:"Casa das Campás / A Moureira", enigma:"¿Cuál es la diferencia entre valentía y desesperación — y cuándo cruzamos esa línea sin darnos cuenta?"},
-  {id:17, lat:42.433824, lng:-8.645046, nombre:"El Portal de los que Tuvieron que Callar", lugar:"Rúa Real", enigma:"¿Cuánto de lo que piensas no lo dices — y a qué le tienes miedo realmente?"},
-  {id:18, lat:42.430711, lng:-8.651022, nombre:"El Portal de los Iniciados", lugar:"Casona de los Fonseca / Paseo de Colón", enigma:"¿Cuántas puertas hay a tu alrededor que no has visto todavía — porque nadie te enseñó a mirarlas?"},
-  {id:19, lat:42.432380, lng:-8.639913, nombre:"El Portal de las que Resistieron", lugar:"Convento de Santa Clara", enigma:"¿Qué guardas tú detrás de tus propios muros — y qué florecería si los abrieras?"},
-  {id:20, lat:42.435743, lng:-8.643884, nombre:"El Portal del Río y el Puente", lugar:"Puente del Burgo", enigma:"¿Cuánto has cambiado desde que eras quien eras — y sigues siendo tú?"},
-  {id:21, lat:42.432823, lng:-8.643729, nombre:"El Portal de lo que Está Debajo", lugar:"Subsuelo de la ciudad vieja", enigma:"¿Qué llevas tú enterrado que todavía no has desenterrado — y tienes miedo de encontrarlo, o miedo de que ya no esté?"},
-  {id:22, lat:42.424560, lng:-8.655229, nombre:"El Portal de la Isla Prohibida", lugar:"Mirador a la ría — Isla de Tambo", enigma:"¿Tienes tú una isla así — un lugar interior al que nadie tiene acceso, donde guardas lo que no puedes mostrar?"},
-  {id:23, lat:42.431954, lng:-8.643914, nombre:"El Portal de los que Quisieron ser Recordados", lugar:"Casa de las Caras / Praza da Estrela", enigma:"¿Qué dejarías tú grabado que de verdad valiera la pena recordar — y para quién?"},
+  {id:7, lat:42.434103, lng:-8.643598, nombre:"El Portal de las Peixeiras", lugar:"Mercado de Abastos", enigma:"¿Cuándo fue la última vez que estuviste completamente presente en algo tan sencillo como esto — sin pensar en lo que viene ni recordar lo que fue?"},
+  {id:8, lat:42.433674, lng:-8.643899, nombre:"El Portal de la Sirena", lugar:"Plaza de A Pedreira", enigma:"¿Qué hay en nosotros de mar — y qué hay de tierra? ¿Y qué ocurre cuando las dos partes se separan?"},
+  {id:9, lat:42.432637, lng:-8.643220, nombre:"El Portal de los Recuerdos", lugar:"Plaza de A Leña / Museo Provincial", enigma:"Castelao guardó la memoria de su pueblo desde el exilio, sabiendo que quizás no volvería. ¿Qué guardarías tú si supieras que te vas — y qué dejarías ir sin mirar atrás?"},
+  {id:10, lat:42.432948, lng:-8.642492, nombre:"El Portal de los Sabios Olvidados", lugar:"Iglesia de San Bartolomé", enigma:"¿Qué precio tiene el conocimiento que no se deja controlar — y cuánto estamos dispuestos a pagar por él?"},
+  {id:11, lat:42.431330, lng:-8.643681, nombre:"El Portal del Emperador", lugar:"Plaza de A Ferrería", enigma:"De todo lo que hizo en su vida, quizás esto es lo que más dura. ¿Qué pequeña cosa tuya podría durar más que tú?"},
+  {id:12, lat:42.431438, lng:-8.643367, nombre:"El Portal de la Fraternidad", lugar:"Iglesia de San Francisco", enigma:"¿Qué es el amor cuando no puede quedarse — y qué queda de él cuando todo lo demás se ha ido?"},
+  {id:13, lat:42.430781, lng:-8.643748, nombre:"El Portal del Cielo", lugar:"A Virxe Peregrina", enigma:"¿Cuántas veces hemos quedado mutilados por algo que no esperábamos — y cuánto tardamos en reconstruirnos?"},
+  {id:14, lat:42.430816, lng:-8.644279, nombre:"El Portal de la Tierra", lugar:"O Loro Ravachol", enigma:"Ravachol decía lo que nadie se atrevía a decir — en gallego, con retranca, sin pedir permiso. ¿Cuántas verdades guardas tú que no dices — y por qué?"},
+  {id:15, lat:42.429395, lng:-8.645671, nombre:"El Portal de la Noche Intelectual", lugar:"Calle Michelena / Cafés y Salones", enigma:"¿Qué se pierde cuando desaparecen los lugares donde la gente se reúne a pensar en voz alta — y qué hemos puesto en su lugar?"},
+  {id:16, lat:42.432298, lng:-8.646215, nombre:"El Portal del Último Pirata", lugar:"Casa das Campás / A Moureira", enigma:"¿Cuál es la diferencia entre valentía y desesperación — y cuándo cruzamos esa línea sin darnos cuenta?"},
+  {id:17, lat:42.433644, lng:-8.645090, nombre:"El Portal de los que Tuvieron que Callar", lugar:"Rúa Real", enigma:"¿Cuánto de lo que piensas no lo dices — y a qué le tienes miedo realmente?"},
+  {id:18, lat:42.430560, lng:-8.651063, nombre:"El Portal de los Iniciados", lugar:"Casona de los Fonseca / Paseo de Colón", enigma:"¿Cuántas puertas hay a tu alrededor que no has visto todavía — porque nadie te enseñó a mirarlas?"},
+  {id:19, lat:42.432452, lng:-8.640023, nombre:"El Portal de las que Resistieron", lugar:"Convento de Santa Clara", enigma:"¿Qué guardas tú detrás de tus propios muros — y qué florecería si los abrieras?"},
+  {id:20, lat:42.435249, lng:-8.644410, nombre:"El Portal del Río y el Puente", lugar:"Puente del Burgo", enigma:"¿Cuánto has cambiado desde que eras quien eras — y sigues siendo tú?"},
+  {id:21, lat:42.432596, lng:-8.643929, nombre:"El Portal de lo que Está Debajo", lugar:"Subsuelo de la ciudad vieja", enigma:"¿Qué llevas tú enterrado que todavía no has desenterrado — y tienes miedo de encontrarlo, o miedo de que ya no esté?"},
+  {id:22, lat:42.428733, lng:-8.653585, nombre:"El Portal de la Isla Prohibida", lugar:"Mirador a la ría — Isla de Tambo", enigma:"¿Tienes tú una isla así — un lugar interior al que nadie tiene acceso, donde guardas lo que no puedes mostrar?"},
+  {id:23, lat:42.431856, lng:-8.643892, nombre:"El Portal de los que Quisieron ser Recordados", lugar:"Casa de las Caras / Praza da Estrela", enigma:"¿Qué dejarías tú grabado que de verdad valiera la pena recordar — y para quién?"},
 ];
 const RADIO=30;                  // metros de activación
 const CENTRO=[42.4323,-8.64531];  // centro del mapa al abrir
@@ -288,7 +288,7 @@ async function elegir(indice){
   const espera=document.createElement('div');
   espera.className='conv-reaccion'; espera.innerHTML='<span style="font-style:italic;opacity:.6">El portal medita tu elección…</span>';
   cz.querySelector('.conv-box').appendChild(espera);
-  espera.scrollIntoView({behavior:'smooth',block:'nearest'});
+  espera.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const r=await fetch(WORKER+'/reaccion',{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -296,7 +296,7 @@ async function elegir(indice){
     });
     const d=await r.json();
     espera.innerHTML=escapar(d.reaccion||'El silencio del lugar responde por ti. Sigue caminando; hay más puertas que aún no has cruzado.');
-    espera.scrollIntoView({behavior:'smooth',block:'nearest'});
+    espera.scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){
     espera.innerHTML='El portal se ha quedado en silencio. Continúa tu viaje; otras puertas te esperan.';
   }
