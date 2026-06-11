@@ -75,7 +75,7 @@
   .conv-opcion:hover{background:rgba(244,211,94,.12);border-color:var(--oro);}
   .conv-opcion:disabled{opacity:.4;cursor:default;}
   .conv-opcion.elegida{background:rgba(244,211,94,.18);border-color:var(--oro-vivo);}
-  .conv-reaccion{color:var(--crema);font-size:16px;line-height:1.65;margin-top:16px;padding-top:16px;border-top:1px solid rgba(244,211,94,.2);animation:aparecer .5s ease;}
+  .conv-reaccion{color:var(--crema);font-size:17px;line-height:1.7;margin-top:16px;padding-top:16px;border-top:1px solid rgba(244,211,94,.2);animation:aparecer .5s ease;}
 </style>
 </head>
 <body>
@@ -188,6 +188,7 @@ function irAMapa(){
   document.getElementById('pantalla-mapa').classList.add('activa');
   document.getElementById('total-n').textContent=PORTALES.length;
   if(!mapa) cargarLeaflet(()=>setTimeout(initMapa,150));
+  else setTimeout(()=>{ mapa.invalidateSize(); },200);
 }
 
 function initMapa(){
@@ -309,6 +310,9 @@ function volverAlMapa(){
   document.getElementById('conv-zona').innerHTML='';  // limpia la conversación
   document.getElementById('pantalla-portal').classList.remove('activa');
   document.getElementById('pantalla-mapa').classList.add('activa');
+  // El mapa estaba oculto: hay que decirle a Leaflet que recalcule su tamaño,
+  // si no, las teselas se dibujan mal y queda la mancha verde del fondo.
+  if(mapa){ setTimeout(()=>{ mapa.invalidateSize(); },200); }
   actualizar();
 }
 
