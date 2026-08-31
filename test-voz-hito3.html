@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba de voz — Hito 3</title>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    background: #0E3328;
+    color: #F5EFE0;
+    text-align: center;
+    padding: 40px 20px;
+    margin: 0;
+  }
+  h1 { color: #F4D35E; font-size: 1.4em; }
+  p { max-width: 480px; margin: 0 auto 30px; line-height: 1.4; }
+  button {
+    font-size: 1.2em;
+    padding: 22px 36px;
+    border-radius: 14px;
+    border: none;
+    background: #C8A84B;
+    color: #0E3328;
+    font-weight: bold;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  button:active { background: #F4D35E; }
+  #resultado {
+    margin-top: 30px;
+    font-size: 1.1em;
+    white-space: pre-wrap;
+    background: #1D5C4A;
+    padding: 16px;
+    border-radius: 10px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>
+</head>
+<body>
+  <h1>El Orbe Activo — Prueba de voz (Hito 3)</h1>
+  <p>Mantén pulsado el botón, di uno de estos nombres y suelta:<br>
+  <strong>Violante, Tareixa, Aldara, Maior, Elvira, Mendinho, Afonso, Paio, Lourenzo, Brais.</strong></p>
+
+  <button id="btnHablar">🎙️ Mantén pulsado para hablar</button>
+
+  <div id="resultado">Esperando...</div>
+
+  <script>
+    const WORKER = "https://orbe-activo-hito1.galicianrunner.workers.dev";
+    const boton = document.getElementById("btnHablar");
+    const resultado = document.getElementById("resultado");
+    let mediaRecorder;
+    let trozos = [];
+
+    async function empezarGrabacion() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        trozos = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => trozos.push(e.data);
+        mediaRecorder.onstop = enviarAudio;
+        mediaRecorder.start();
+        resultado.textContent = "Escoitando...";
+      } catch (err) {
+        resultado.textContent = "No se pudo acceder al micrófono: " + err.message;
+      }
+    }
+
+    function pararGrabacion() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(t => t.stop());
+      }
+    }
+
+    async function enviarAudio() {
+      resultado.textContent = "Procesando...";
+      const blob = new Blob(trozos, { type: "audio/webm" });
+      const datos = new FormData();
+      datos.append("audio", blob, "grabacion.webm");
+      try {
+        const resp = await fetch(`${WORKER}/escucha`, { method: "POST", body: datos });
+        const j = await resp.json();
+        if (j.error) {
+          resultado.textContent = "Error: " + j.error + (j.detalle ? "\n" + j.detalle : "");
+        } else {
+          resultado.textContent = 'Oído: "' + j.texto_oido + '"\nNombre reconocido: ' + (j.nombre_reconocido || "(ninguno)");
+        }
+      } catch (err) {
+        resultado.textContent = "Fallo al enviar el audio: " + err.message;
+      }
+    }
+
+    boton.addEventListener("mousedown", empezarGrabacion);
+    boton.addEventListener("mouseup", pararGrabacion);
+    boton.addEventListener("touchstart", function(e) { e.preventDefault(); empezarGrabacion(); });
+    boton.addEventListener("touchend", function(e) { e.preventDefault(); pararGrabacion(); });
+  </script>
+</body>
+</html>
