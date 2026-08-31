@@ -138,10 +138,12 @@ function elegirVoz(){
   return voces[0] || null;
 }
 
-function hablar(texto){
+// encolarHabla: añade una frase a la cola de voz SIN cortar lo que ya
+// está sonando o esperando turno. Se usa para leer El Ojo y la Sombra
+// una detrás de otra sin que se pisen.
+function encolarHabla(texto){
   if (!texto || !('speechSynthesis' in window)) return;
   try{
-    speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(texto);
     const voz = elegirVoz();
     if (voz){ utter.voice = voz; utter.lang = voz.lang; }
@@ -149,6 +151,14 @@ function hablar(texto){
     utter.rate = 0.95;
     speechSynthesis.speak(utter);
   }catch(e){ /* si falla, simplemente no habla; el texto sigue en pantalla */ }
+}
+
+// hablar: corta lo que estuviera sonando y empieza esta frase ya mismo.
+// Se usa en los botones "🔊 Oír" (repetir una línea concreta a demanda).
+function hablar(texto){
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  encolarHabla(texto);
 }
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
@@ -277,11 +287,13 @@ async function abrirNodo(){
 
     cont.innerHTML = html;
 
-    // Intento automático de reproducir la(s) línea(s) al abrir el nodo.
+    // Intento automático de reproducir la(s) línea(s) al abrir el nodo,
+    // una detrás de otra (encolarHabla no corta la anterior).
     // Si el navegador lo bloquea por no venir de un toque directo, no pasa
     // nada: el botón 🔊 Oír siempre funciona porque es un toque directo.
-    if (d.ojo) hablar(d.ojo);
-    hablar(d.sombra.texto);
+    speechSynthesis.cancel();
+    if (d.ojo) encolarHabla(d.ojo);
+    encolarHabla(d.sombra.texto);
   }catch(e){
     cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
   }
