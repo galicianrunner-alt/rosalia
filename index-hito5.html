@@ -79,6 +79,7 @@
     <p class="subt">Prototipo — Hito 5: con voz hablada</p>
     <p class="intro" id="estado-conexion">Conectando con el resonador...</p>
     <button class="btn-grande" id="btn-empezar" onclick="irAMapa()" disabled>Empezar la prueba</button>
+    <button class="btn-gps" style="margin-top:12px;width:100%" onclick="reiniciarSesion()">🔄 Reiniciar sesión (empezar de cero)</button>
   </div>
 
   <div id="pantalla-mapa" class="pantalla">
@@ -152,6 +153,12 @@ function hablar(texto){
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
 function leerIdGuardado(){ try{ return localStorage.getItem('orbe_resonador_id'); }catch(e){ return null; } }
+
+// --- NUEVO en el Hito 5: botón para olvidar la sesión guardada y empezar de cero ---
+function reiniciarSesion(){
+  try{ localStorage.removeItem('orbe_resonador_id'); }catch(e){}
+  location.reload();
+}
 
 async function iniciarSesion(){
   const guardado = leerIdGuardado();
