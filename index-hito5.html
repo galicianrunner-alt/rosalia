@@ -52,8 +52,9 @@
   .texto-box{background:rgba(0,0,0,.25);border-left:3px solid var(--oro);border-radius:0 12px 12px 0;padding:16px 18px;margin-bottom:16px;}
   .texto-cabecera{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
   .texto-label{color:var(--oro);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;}
-  .btn-oir{background:none;border:1px solid var(--oro);color:var(--oro);border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:Georgia,serif;}
+  .btn-oir{background:none;border:1px solid var(--oro);color:var(--oro);border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:Georgia,serif;transition:background .2s,color .2s,box-shadow .2s;}
   .btn-oir:active{background:var(--oro);color:var(--verde-oscuro);}
+  .btn-oir.hablando{background:var(--oro-vivo);color:var(--verde-oscuro);box-shadow:0 0 10px rgba(244,211,94,.8);}
   .texto-cuerpo{color:var(--crema);font-size:15px;line-height:1.6;}
   .cargando{color:rgba(245,239,224,.6);font-size:14px;font-style:italic;text-align:center;padding:20px;}
   .error-box{margin-top:12px;padding:14px;background:rgba(200,80,60,.15);border:1px dashed rgba(200,80,60,.5);border-radius:12px;color:#f0c9c0;font-size:13px;text-align:center;}
@@ -141,7 +142,9 @@ function elegirVoz(){
 // encolarHabla: añade una frase a la cola de voz SIN cortar lo que ya
 // está sonando o esperando turno. Se usa para leer El Ojo y la Sombra
 // una detrás de otra sin que se pisen.
-function encolarHabla(texto){
+// botonId (opcional): id del botón "🔊 Oír" correspondiente, para
+// iluminarlo mientras suena esa frase y saber quién está hablando.
+function encolarHabla(texto, botonId){
   if (!texto || !('speechSynthesis' in window)) return;
   try{
     const utter = new SpeechSynthesisUtterance(texto);
@@ -149,16 +152,21 @@ function encolarHabla(texto){
     if (voz){ utter.voice = voz; utter.lang = voz.lang; }
     else { utter.lang = 'es-ES'; }
     utter.rate = 0.95;
+    if (botonId){
+      utter.onstart = () => { const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); };
+      utter.onend   = () => { const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); };
+      utter.onerror = () => { const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); };
+    }
     speechSynthesis.speak(utter);
   }catch(e){ /* si falla, simplemente no habla; el texto sigue en pantalla */ }
 }
 
 // hablar: corta lo que estuviera sonando y empieza esta frase ya mismo.
 // Se usa en los botones "🔊 Oír" (repetir una línea concreta a demanda).
-function hablar(texto){
+function hablar(texto, botonId){
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
-  encolarHabla(texto);
+  encolarHabla(texto, botonId);
 }
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
@@ -264,9 +272,9 @@ async function abrirNodo(){
 
     let html = '<p class="n-lugar">' + escapar(d.nodo.nombre) + '</p>';
     if (d.ojo){
-      html += '<div class="texto-box"><div class="texto-cabecera"><p class="texto-label">El Ojo</p><button class="btn-oir" onclick="hablar(this.dataset.texto)" data-texto="' + escapar(d.ojo) + '">🔊 Oír</button></div><p class="texto-cuerpo">' + escapar(d.ojo) + '</p></div>';
+      html += '<div class="texto-box"><div class="texto-cabecera"><p class="texto-label">El Ojo</p><button class="btn-oir" id="btn-oir-ojo" onclick="hablar(this.dataset.texto,\'btn-oir-ojo\')" data-texto="' + escapar(d.ojo) + '">🔊 Repetir</button></div><p class="texto-cuerpo">' + escapar(d.ojo) + '</p></div>';
     }
-    html += '<div class="texto-box"><div class="texto-cabecera"><p class="texto-label">' + escapar(d.sombra.id) + '</p><button class="btn-oir" onclick="hablar(this.dataset.texto)" data-texto="' + escapar(d.sombra.texto) + '">🔊 Oír</button></div><p class="texto-cuerpo">' + escapar(d.sombra.texto) + '</p></div>';
+    html += '<div class="texto-box"><div class="texto-cabecera"><p class="texto-label">' + escapar(d.sombra.id) + '</p><button class="btn-oir" id="btn-oir-sombra" onclick="hablar(this.dataset.texto,\'btn-oir-sombra\')" data-texto="' + escapar(d.sombra.texto) + '">🔊 Repetir</button></div><p class="texto-cuerpo">' + escapar(d.sombra.texto) + '</p></div>';
 
     if (d.mision === 'presentacion' && d.nombres){
       const todos = [...d.nombres.mujer, ...d.nombres.hombre];
@@ -292,8 +300,8 @@ async function abrirNodo(){
     // Si el navegador lo bloquea por no venir de un toque directo, no pasa
     // nada: el botón 🔊 Oír siempre funciona porque es un toque directo.
     speechSynthesis.cancel();
-    if (d.ojo) encolarHabla(d.ojo);
-    encolarHabla(d.sombra.texto);
+    if (d.ojo) encolarHabla(d.ojo, 'btn-oir-ojo');
+    encolarHabla(d.sombra.texto, 'btn-oir-sombra');
   }catch(e){
     cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
   }
