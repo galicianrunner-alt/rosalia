@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>El Orbe Activo — Hito 4 (con voz)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{
+    --oro:#C8A84B; --oro-vivo:#F4D35E; --verde:#1D5C4A;
+    --verde-oscuro:#0E3328; --crema:#F5EFE0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;font-family:Georgia,serif;background:#1a1410;}
+  #app{height:100vh;display:flex;align-items:center;justify-content:center;}
+  #movil{width:100%;max-width:420px;height:100vh;max-height:880px;background:var(--verde-oscuro);position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .pantalla{position:absolute;inset:0;display:none;flex-direction:column;}
+  .pantalla.activa{display:flex;}
+
+  #bienvenida{background:radial-gradient(circle at 50% 30%,var(--verde) 0%,var(--verde-oscuro) 70%);justify-content:center;padding:40px 32px;text-align:center;overflow-y:auto;}
+  .hada{font-size:46px;color:var(--oro-vivo);text-shadow:0 0 20px rgba(244,211,94,.6);margin-bottom:6px;}
+  #bienvenida h1{font-size:30px;color:var(--crema);font-weight:normal;letter-spacing:1px;}
+  .subt{font-size:14px;color:var(--oro-vivo);font-style:italic;margin-bottom:20px;}
+  .intro{font-size:14px;color:rgba(245,239,224,.75);line-height:1.6;margin-bottom:14px;}
+  .btn-grande{margin-top:14px;width:100%;padding:16px;background:var(--oro);color:var(--verde-oscuro);border:none;border-radius:14px;font-size:16px;font-weight:bold;font-family:Georgia,serif;cursor:pointer;letter-spacing:.5px;}
+
+  .cabecera{padding:16px 20px 10px;display:flex;justify-content:space-between;align-items:center;background:var(--verde-oscuro);z-index:1000;}
+  .cab-titulo{color:var(--crema);font-size:14px;font-style:italic;}
+  .estado{background:var(--oro);color:var(--verde-oscuro);border-radius:12px;padding:3px 12px;font-size:12px;font-weight:bold;}
+  #mapa{flex:1;width:100%;background:var(--verde);}
+  .portal-icono{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--oro);color:var(--verde-oscuro);font-size:14px;border:2px solid var(--crema);box-shadow:0 2px 8px rgba(0,0,0,.5);transition:transform .3s,box-shadow .3s,background .3s;}
+  .portal-icono.cerca{background:var(--oro-vivo);transform:scale(1.4);box-shadow:0 0 0 6px rgba(244,211,94,.35),0 0 18px rgba(244,211,94,.9);}
+  .usuario-punto{width:16px;height:16px;border-radius:50%;background:#5BBFFF;border:3px solid #fff;box-shadow:0 0 10px rgba(91,191,255,.9);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;}
+  .usuario-pulso{width:16px;height:16px;border-radius:50%;background:rgba(91,191,255,.4);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulso 2s infinite;}
+  @keyframes pulso{0%{transform:translate(-50%,-50%) scale(1);opacity:.8;}100%{transform:translate(-50%,-50%) scale(4);opacity:0;}}
+  .instruccion{color:rgba(245,239,224,.55);font-size:12px;text-align:center;padding:8px 16px 4px;font-style:italic;background:var(--verde-oscuro);}
+  .aviso{margin:6px 14px 14px;padding:14px 18px;background:var(--oro);border-radius:16px;display:flex;align-items:center;gap:12px;animation:aparecer .4s ease;}
+  .aviso-label{font-size:11px;color:var(--verde-oscuro);text-transform:uppercase;letter-spacing:1px;opacity:.7;}
+  .aviso-nombre{font-size:15px;color:var(--verde-oscuro);font-weight:bold;margin:2px 0;}
+  .aviso-dist{font-size:12px;color:var(--verde-oscuro);opacity:.7;}
+  .aviso-btn{padding:12px 22px;background:var(--verde-oscuro);color:var(--oro-vivo);border:none;border-radius:12px;font-size:15px;font-weight:bold;font-family:Georgia,serif;cursor:pointer;}
+  .aviso-vacio{margin:6px 14px 14px;padding:14px;background:rgba(245,239,224,.06);border-radius:16px;color:rgba(245,239,224,.5);font-size:13px;text-align:center;font-style:italic;border:1px dashed rgba(244,211,94,.2);}
+  @keyframes aparecer{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  .control-fila{display:flex;gap:8px;padding:0 14px 14px;background:var(--verde-oscuro);}
+  .btn-gps{flex:1;padding:11px;border-radius:10px;font-family:Georgia,serif;font-size:13px;cursor:pointer;border:1px solid var(--oro);background:transparent;color:var(--oro);}
+  .btn-gps.activo{background:var(--oro);color:var(--verde-oscuro);font-weight:bold;}
+
+  #pantalla-nodo{background:radial-gradient(circle at 50% 0%,var(--verde) 0%,var(--verde-oscuro) 60%);overflow-y:auto;padding:28px 24px;}
+  .n-icono{font-size:32px;color:var(--oro-vivo);text-align:center;text-shadow:0 0 16px rgba(244,211,94,.6);}
+  .n-lugar{color:var(--oro);font-size:13px;text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin:8px 0 4px;}
+  .n-nombre{color:var(--crema);font-size:20px;text-align:center;font-weight:normal;line-height:1.3;margin-bottom:22px;}
+  .texto-box{background:rgba(0,0,0,.25);border-left:3px solid var(--oro);border-radius:0 12px 12px 0;padding:16px 18px;margin-bottom:16px;}
+  .texto-label{color:var(--oro);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;}
+  .texto-cuerpo{color:var(--crema);font-size:15px;line-height:1.6;}
+  .cargando{color:rgba(245,239,224,.6);font-size:14px;font-style:italic;text-align:center;padding:20px;}
+  .error-box{margin-top:12px;padding:14px;background:rgba(200,80,60,.15);border:1px dashed rgba(200,80,60,.5);border-radius:12px;color:#f0c9c0;font-size:13px;text-align:center;}
+  .ok-box{margin-top:20px;padding:14px;background:rgba(244,211,94,.12);border:1px dashed rgba(244,211,94,.4);border-radius:12px;color:var(--oro-vivo);font-size:13px;text-align:center;font-style:italic;}
+  .btn-volver{width:100%;padding:14px;background:transparent;color:var(--oro);border:1px solid var(--oro);border-radius:12px;font-size:15px;font-family:Georgia,serif;cursor:pointer;margin-top:20px;}
+
+  .voz-box{margin-top:10px;padding-top:18px;border-top:1px dashed rgba(244,211,94,.3);}
+  .voz-titulo{color:var(--oro);font-size:12px;text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin-bottom:12px;}
+  .btn-mic{width:100%;padding:18px;background:var(--oro);color:var(--verde-oscuro);border:none;border-radius:14px;font-size:16px;font-weight:bold;font-family:Georgia,serif;cursor:pointer;margin-bottom:10px;user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+  .btn-mic:active{background:var(--oro-vivo);}
+  #estado-voz{color:rgba(245,239,224,.8);font-size:13px;text-align:center;min-height:18px;margin-bottom:16px;font-style:italic;}
+  .nombres-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .btn-nombre{padding:11px;background:transparent;border:1px solid var(--oro);border-radius:10px;color:var(--oro);font-family:Georgia,serif;font-size:13px;cursor:pointer;}
+  .btn-nombre:active{background:var(--oro);color:var(--verde-oscuro);}
+</style>
+</head>
+<body>
+<div id="app"><div id="movil">
+
+  <div id="bienvenida" class="pantalla activa">
+    <div class="hada">✦</div>
+    <h1>El Orbe Activo</h1>
+    <p class="subt">Prototipo — Hito 4: con voz</p>
+    <p class="intro" id="estado-conexion">Conectando con el resonador...</p>
+    <button class="btn-grande" id="btn-empezar" onclick="irAMapa()" disabled>Empezar la prueba</button>
+  </div>
+
+  <div id="pantalla-mapa" class="pantalla">
+    <div class="cabecera">
+      <span class="cab-titulo">Prueba de nodo único</span>
+      <span class="estado" id="estado-txt">sin visitar</span>
+    </div>
+    <div id="mapa"></div>
+    <p class="instruccion" id="instruccion">Toca el mapa para moverte — simula caminar por la ciudad</p>
+    <div id="zona-aviso"></div>
+    <div class="control-fila">
+      <button class="btn-gps activo" id="btn-sim" onclick="modoSimulado()">✦ Modo simulación</button>
+      <button class="btn-gps" id="btn-gps" onclick="modoGPSReal()">◉ GPS real (en el móvil)</button>
+    </div>
+  </div>
+
+  <div id="pantalla-nodo" class="pantalla">
+    <div class="n-icono">✦</div>
+    <div id="n-contenido">
+      <p class="cargando">Abrindo o canal co resonador...</p>
+    </div>
+    <button class="btn-volver" onclick="volverAlMapa()">← Volver al mapa</button>
+  </div>
+
+</div></div>
+
+<script>
+const WORKER = "https://orbe-activo-hito1.galicianrunner.workers.dev";
+const NODO_COORD = { lat: 42.434118, lng: -8.647704, lugar: "Campillo de Santa María" };
+const RADIO=30;
+const CENTRO=[42.4335,-8.6470];
+
+let mapa,usuarioMarker,nodoMarker;
+let posicion={lat:42.4330,lng:-8.6475};
+let modoGPS=false,watchId=null;
+let resonadorId=null;
+let mediaRecorder=null,trozosAudio=[];
+
+function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
+function leerIdGuardado(){ try{ return localStorage.getItem('orbe_resonador_id'); }catch(e){ return null; } }
+
+async function iniciarSesion(){
+  const guardado = leerIdGuardado();
+  if (guardado){
+    resonadorId = guardado;
+    document.getElementById('estado-conexion').textContent = 'Canal reconocido. Listo para empezar.';
+    document.getElementById('btn-empezar').disabled = false;
+    return;
+  }
+  try{
+    const r = await fetch(WORKER + '/sesion');
+    const d = await r.json();
+    resonadorId = d.resonador_id;
+    guardarId(resonadorId);
+    document.getElementById('estado-conexion').textContent = 'Canal abierto. Listo para empezar.';
+    document.getElementById('btn-empezar').disabled = false;
+  }catch(e){
+    document.getElementById('estado-conexion').textContent = 'Non se puido conectar co resonador. Comproba a túa conexión e recarga a páxina.';
+  }
+}
+
+function distancia(la1,ln1,la2,ln2){
+  const R=6371000,tR=d=>d*Math.PI/180;
+  const dLa=tR(la2-la1),dLn=tR(ln2-ln1);
+  const a=Math.sin(dLa/2)**2+Math.cos(tR(la1))*Math.cos(tR(la2))*Math.sin(dLn/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function cargarLeaflet(cb){
+  if(window.L){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  s.onload=()=>cb();
+  s.onerror=()=>{document.getElementById('mapa').innerHTML='<p style="color:#F5EFE0;padding:30px;text-align:center;font-style:italic">No se pudo cargar el mapa.</p>';};
+  document.head.appendChild(s);
+}
+
+function irAMapa(){
+  document.getElementById('bienvenida').classList.remove('activa');
+  document.getElementById('pantalla-mapa').classList.add('activa');
+  if(!mapa) cargarLeaflet(()=>setTimeout(initMapa,150));
+  else setTimeout(()=>{ mapa.invalidateSize(); },200);
+}
+
+function initMapa(){
+  mapa=L.map('mapa',{zoomControl:true,attributionControl:false}).setView(CENTRO,17);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(mapa);
+  const icon=L.divIcon({className:'',html:'<div class="portal-icono" id="pico-nodo">✦</div>',iconSize:[28,28],iconAnchor:[14,14]});
+  nodoMarker=L.marker([NODO_COORD.lat,NODO_COORD.lng],{icon}).addTo(mapa);
+  nodoMarker.on('click',()=>{const d=distancia(posicion.lat,posicion.lng,NODO_COORD.lat,NODO_COORD.lng); if(d<=RADIO) abrirNodo(); else flashLejos(Math.round(d));});
+  const uicon=L.divIcon({className:'',html:'<div class="usuario-icono"><div class="usuario-pulso"></div><div class="usuario-punto"></div></div>',iconSize:[16,16],iconAnchor:[8,8]});
+  usuarioMarker=L.marker([posicion.lat,posicion.lng],{icon:uicon,zIndexOffset:1000}).addTo(mapa);
+  mapa.on('click',e=>{ if(!modoGPS){ posicion={lat:e.latlng.lat,lng:e.latlng.lng}; actualizar(); }});
+  actualizar();
+}
+
+function actualizar(){
+  if(usuarioMarker) usuarioMarker.setLatLng([posicion.lat,posicion.lng]);
+  const d=distancia(posicion.lat,posicion.lng,NODO_COORD.lat,NODO_COORD.lng);
+  const el=document.getElementById('pico-nodo');
+  if(el) el.classList.toggle('cerca', d<=RADIO);
+  pintarAviso(d<=RADIO ? Math.round(d) : null);
+}
+
+function pintarAviso(dist){
+  const z=document.getElementById('zona-aviso');
+  if(dist!==null){
+    z.innerHTML='<div class="aviso"><div style="flex:1"><p class="aviso-label">Estás cerca del nodo</p><p class="aviso-nombre">'+NODO_COORD.lugar+'</p><p class="aviso-dist">a '+dist+' metros</p></div><button class="aviso-btn" onclick="abrirNodo()">Abrir</button></div>';
+  } else {
+    z.innerHTML='<div class="aviso-vacio">Acércate al punto dorado del Campillo de Santa María</div>';
+  }
+}
+function flashLejos(d){
+  const z=document.getElementById('zona-aviso');
+  z.innerHTML='<div class="aviso-vacio">Estás a '+d+' m del nodo. Acércate a menos de '+RADIO+' m.</div>';
+  setTimeout(actualizar,2200);
+}
+
+async function abrirNodo(){
+  document.getElementById('estado-txt').textContent='visitado';
+  document.getElementById('pantalla-mapa').classList.remove('activa');
+  document.getElementById('pantalla-nodo').classList.add('activa');
+  document.getElementById('pantalla-nodo').scrollTop=0;
+  const cont = document.getElementById('n-contenido');
+  cont.innerHTML = '<p class="cargando">Abrindo o canal co resonador...</p>';
+  try{
+    const r = await fetch(WORKER + '/nodo-activo?id=' + encodeURIComponent(resonadorId));
+    const d = await r.json();
+    if (d.error){
+      cont.innerHTML = '<div class="error-box">O Worker respondeu cun erro: ' + escapar(d.error) + '</div>';
+      return;
+    }
+    let html = '<p class="n-lugar">' + escapar(d.nodo.nombre) + '</p>';
+    if (d.ojo){
+      html += '<div class="texto-box"><p class="texto-label">El Ojo</p><p class="texto-cuerpo">' + escapar(d.ojo) + '</p></div>';
+    }
+    html += '<div class="texto-box"><p class="texto-label">' + escapar(d.sombra.id) + '</p><p class="texto-cuerpo">' + escapar(d.sombra.texto) + '</p></div>';
+    if (d.mision === 'presentacion' && d.nombres){
+      const todos = [...d.nombres.mujer, ...d.nombres.hombre];
+      html += '<div class="voz-box">' +
+        '<p class="voz-titulo">Escolle o teu nome</p>' +
+        '<button class="btn-mic" id="btn-mic"' +
+          ' onmousedown="empezarGrabacion()" onmouseup="pararGrabacion()"' +
+          ' ontouchstart="event.preventDefault();empezarGrabacion()" ontouchend="event.preventDefault();pararGrabacion()"' +
+          '>🎙️ Mantén pulsado e di un nome</button>' +
+        '<p id="estado-voz">Ou toca un dos nomes:</p>' +
+        '<div class="nombres-grid">' +
+          todos.map(n => '<button class="btn-nombre" onclick="elegirNombre(\'' + n + '\')">' + n + '</button>').join('') +
+        '</div>' +
+      '</div>';
+    } else if (d.mision === 'presentacion_completa'){
+      html += '<div class="ok-box">Hito 4 superado: el Worker recordó tu elección y sirvió un contenido distinto en tu segunda visita.</div>';
+    }
+    cont.innerHTML = html;
+  }catch(e){
+    cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
+  }
+}
+
+async function empezarGrabacion(){
+  const estadoVoz = document.getElementById('estado-voz');
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    trozosAudio = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => trozosAudio.push(e.data);
+    mediaRecorder.onstop = enviarAudioParaElegir;
+    mediaRecorder.start();
+    if (estadoVoz) estadoVoz.textContent = 'Escoitando...';
+  }catch(e){
+    if (estadoVoz) estadoVoz.textContent = 'Non se puido acceder ao micrófono: ' + e.message;
+  }
+}
+
+function pararGrabacion(){
+  if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+}
+
+async function enviarAudioParaElegir(){
+  const estadoVoz = document.getElementById('estado-voz');
+  if (estadoVoz) estadoVoz.textContent = 'Procesando...';
+  const blob = new Blob(trozosAudio, { type: 'audio/webm' });
+  const datos = new FormData();
+  datos.append('audio', blob, 'grabacion.webm');
+  try{
+    const r = await fetch(WORKER + '/escucha', { method: 'POST', body: datos });
+    const j = await r.json();
+    if (j.error){
+      if (estadoVoz) estadoVoz.textContent = 'Erro: ' + j.error;
+      return;
+    }
+    if (j.nombre_reconocido){
+      if (estadoVoz) estadoVoz.textContent = 'Entendín: ' + j.nombre_reconocido + '...';
+      await elegirNombre(j.nombre_reconocido);
+    } else {
+      if (estadoVoz) estadoVoz.textContent = 'Non recoñecín ningún nome' + (j.texto_oido ? ' ("' + j.texto_oido + '")' : '') + '. Proba outra vez ou toca un nome da lista.';
+    }
+  }catch(e){
+    if (estadoVoz) estadoVoz.textContent = 'Fallou o envío do audio: ' + e.message;
+  }
+}
+
+async function elegirNombre(nombre){
+  try{
+    const r = await fetch(WORKER + '/elegir-nombre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resonador_id: resonadorId, nombre: nombre })
+    });
+    const j = await r.json();
+    if (j.error){
+      alert('Non se puido gardar o nome: ' + j.error);
+      return;
+    }
+    abrirNodo();
+  }catch(e){
+    alert('Fallou o gardado do nome. Comproba a conexión.');
+  }
+}
+
+function escapar(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+
+function volverAlMapa(){
+  document.getElementById('pantalla-nodo').classList.remove('activa');
+  document.getElementById('pantalla-mapa').classList.add('activa');
+  if(mapa){ setTimeout(()=>{ mapa.invalidateSize(); },200); }
+  actualizar();
+}
+
+function modoSimulado(){
+  modoGPS=false;
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  document.getElementById('btn-sim').classList.add('activo');
+  document.getElementById('btn-gps').classList.remove('activo');
+  document.getElementById('instruccion').textContent='Toca el mapa para moverte — simula caminar por la ciudad';
+}
+function modoGPSReal(){
+  if(!navigator.geolocation){alert('Tu navegador no permite geolocalización.');return;}
+  modoGPS=true;
+  document.getElementById('btn-gps').classList.add('activo');
+  document.getElementById('btn-sim').classList.remove('activo');
+  document.getElementById('instruccion').textContent='Usando tu GPS real — camina hacia el Campillo de Santa María';
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{posicion={lat:pos.coords.latitude,lng:pos.coords.longitude};if(mapa)mapa.setView([posicion.lat,posicion.lng],17);actualizar();},
+    err=>{alert('No se pudo acceder al GPS. En el móvil, al aire libre, funcionará.');modoSimulado();},
+    {enableHighAccuracy:true,maximumAge:1000,timeout:10000}
+  );
+}
+
+iniciarSesion();
+</script>
+</body>
+</html>
