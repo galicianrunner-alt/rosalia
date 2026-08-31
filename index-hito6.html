@@ -108,6 +108,12 @@
 </div></div>
 
 <script>
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  HITO 6 — dos nodos reales y la Misión 1 completa. El mapa       ║
+// ║  ilumina en dorado el nodo al que le toca ir al jugador según     ║
+// ║  su etapa actual (consultada en /estado); el resto del             ║
+// ║  contenido y las acciones se piden a /nodo-activo y /accion.       ║
+// ╚══════════════════════════════════════════════════════════════╝
 const WORKER = "https://orbe-activo-hito1.galicianrunner.workers.dev";
 
 const NODOS = {
@@ -130,7 +136,8 @@ let modoGPS = false, watchId = null;
 let resonadorId = null;
 let misionActual = "presentacion";
 let mediaRecorder = null, trozosAudio = [];
-let accionActual = null;
+let accionActual = null; // { tipo, ... } de la etapa que se está mostrando ahora mismo
+let nodoAbierto = null; // qué nodo físico está abierto en pantalla ahora mismo
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -196,7 +203,7 @@ async function consultarEstado(){
     const r = await fetch(WORKER + '/estado?id=' + encodeURIComponent(resonadorId));
     const d = await r.json();
     misionActual = d.mision || 'presentacion';
-  }catch(e){}
+  }catch(e){ /* si falla, se queda con la última etapa conocida */ }
 }
 
 function distancia(la1,ln1,la2,ln2){
@@ -292,6 +299,7 @@ function flashLejos(d, n){
 }
 
 async function abrirNodo(nodoKey){
+  nodoAbierto = nodoKey;
   document.getElementById('estado-txt').textContent = NODOS[nodoKey].nombre;
   document.getElementById('pantalla-mapa').classList.remove('activa');
   document.getElementById('pantalla-nodo').classList.add('activa');
@@ -395,6 +403,7 @@ async function procesarAudioGrabado(){
         if (estadoVoz) estadoVoz.textContent = 'Non recoñecín ningún nome' + (j.texto_oido ? ' ("' + j.texto_oido + '")' : '') + '. Proba outra vez ou toca un nome.';
       }
     } else {
+      // Acción genérica: basta con que se haya oído algo.
       if (j.texto_oido && j.texto_oido.trim().length > 0){
         if (estadoVoz) estadoVoz.textContent = 'Recibido: "' + j.texto_oido + '"';
         await ejecutarAccion('mic', j.texto_oido);
@@ -420,7 +429,16 @@ async function ejecutarAccion(tipo, valor){
       return;
     }
     misionActual = j.estado.mision;
-    volverAlMapa();
+    // Si la siguiente etapa sigue tocando en el MISMO nodo físico donde
+    // estamos, no hace falta pasar por el mapa: seguimos aquí mismo.
+    // Solo volvemos al mapa cuando la siguiente etapa toca en otro nodo
+    // (porque entonces sí hay que caminar hasta él).
+    const nuevoObjetivo = OBJETIVO_POR_MISION[misionActual] || 'campillo';
+    if (nodoAbierto && nuevoObjetivo === nodoAbierto){
+      abrirNodo(nodoAbierto);
+    } else {
+      volverAlMapa();
+    }
   }catch(e){
     alert('Fallou o rexistro da acción. Comproba a conexión.');
   }
@@ -430,6 +448,7 @@ function escapar(t){ const d=document.createElement('div'); d.textContent=t; ret
 
 async function volverAlMapa(){
   speechSynthesis.cancel();
+  nodoAbierto = null;
   document.getElementById('pantalla-nodo').classList.remove('activa');
   document.getElementById('pantalla-mapa').classList.add('activa');
   await consultarEstado();
