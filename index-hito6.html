@@ -69,6 +69,7 @@
   .nombres-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
   .btn-nombre{padding:11px;background:transparent;border:1px solid var(--oro);border-radius:10px;color:var(--oro);font-family:Georgia,serif;font-size:13px;cursor:pointer;}
   .btn-nombre:active{background:var(--oro);color:var(--verde-oscuro);}
+  .btn-mic:disabled, .btn-nombre:disabled{opacity:.35;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -141,6 +142,7 @@ let nodoAbierto = null; // qué nodo físico está abierto en pantalla ahora mis
 let autoAbiertoPara = null; // "mision|nodo" ya abierto en automático, para no repetirlo en bucle
 let vocesPendientes = 0; // cuántas frases quedan por sonar del nodo actual
 let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz para abrirse solo
+let bloquesInicialesPendientes = 0; // cuántos bloques de la narración propia de este nodo (la que suena al abrirlo) faltan por terminar
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -171,8 +173,34 @@ function vozTerminada(){
     abrirNodo(nodoCombo);
   }
 }
-function encolarHabla(texto, botonId){
-  if (!texto || !('speechSynthesis' in window)) return;
+// Mientras suenan los bloques propios de un nodo recién abierto, el botón
+// de micrófono (y los de escoller nome) están desactivados: así el
+// xogador non pode falar ou escoller antes de escoitar o que ten que dicir.
+// Esta función se avisa cando remata cada bloque "inicial" (ver
+// encolarHabla, parámetro esInicial) e, en canto non queda ningún, activa
+// os controis.
+function marcarBloqueInicialTerminado(){
+  bloquesInicialesPendientes = Math.max(0, bloquesInicialesPendientes - 1);
+  if (bloquesInicialesPendientes === 0) habilitarAccion();
+}
+function habilitarAccion(){
+  const caja = document.getElementById('voz-box');
+  if (!caja) return;
+  caja.classList.remove('voz-bloqueada');
+  caja.querySelectorAll('button').forEach(b => { b.disabled = false; });
+  if (accionActual && accionActual.tipo === 'nombre'){
+    const ev = document.getElementById('estado-voz');
+    if (ev) ev.textContent = 'Ou toca un dos nomes:';
+  } else {
+    const ev = document.getElementById('estado-voz');
+    if (ev && ev.textContent.indexOf('Escoita') === 0) ev.textContent = '';
+  }
+}
+function encolarHabla(texto, botonId, esInicial){
+  if (!texto || !('speechSynthesis' in window)){
+    if (esInicial) marcarBloqueInicialTerminado();
+    return;
+  }
   try{
     const utter = new SpeechSynthesisUtterance(texto);
     const voz = elegirVoz();
@@ -181,16 +209,27 @@ function encolarHabla(texto, botonId){
     utter.rate = 0.95;
     vocesPendientes++;
     utter.onstart = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); } };
-    utter.onend   = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); };
-    utter.onerror = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); };
+    utter.onend   = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); if (esInicial) marcarBloqueInicialTerminado(); };
+    utter.onerror = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); if (esInicial) marcarBloqueInicialTerminado(); };
     speechSynthesis.speak(utter);
-  }catch(e){}
+  }catch(e){
+    vozTerminada();
+    if (esInicial) marcarBloqueInicialTerminado();
+  }
 }
 function hablar(texto, botonId){
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   vocesPendientes = 0;
-  encolarHabla(texto, botonId);
+  // Si alguien pulsa "Repetir" mientras aún esperábamos a que acabase la
+  // narración inicial del nodo, esa espera ya no se puede completar de
+  // forma natural (acabamos de cortarla). Para no dejar los controis
+  // bloqueados para sempre, liberámolos xa.
+  if (bloquesInicialesPendientes > 0){
+    bloquesInicialesPendientes = 0;
+    habilitarAccion();
+  }
+  encolarHabla(texto, botonId, false);
 }
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
@@ -294,8 +333,8 @@ function actualizar(){
   // anterior (p. ej. el tránsito, que es largo y puede que aún no haya
   // terminado cuando llegas caminando), NO la cortamos: se deja marcada
   // como pendiente y se abrirá sola en cuanto esa voz calle (ver
-  // vozTerminada). Mientras tanto NO se ofrece forma de adelantarse
-  // (ver esperandoNarracionDe): nunca se pierde historia.
+  // vozTerminada). Mientras tanto, el botón "Abrir" del aviso sigue
+  // disponible por si el jugador prefiere adelantarse.
   if (dObjetivo <= RADIO && nodoAbierto === null){
     const combo = misionActual + '|' + objetivoKey;
     if (autoAbiertoPara !== combo){
@@ -386,28 +425,33 @@ async function abrirNodo(nodoKey){
         '<p class="texto-cuerpo">' + escapar(b.texto) + '</p></div>';
     });
 
+    // Mientras los bloques de texto de este nodo aún no han terminado de
+    // sonar, el micrófono y los nombres se muestran desactivados: primero
+    // se escucha, luego se actúa. En cuanto acaban (marcarBloqueInicialTerminado
+    // llega a 0), habilitarAccion() los activa solo, sin recargar nada.
+    const bloqueado = (d.bloques || []).length > 0;
     if (d.accion && d.accion.tipo === 'nombre'){
       const todos = [...d.accion.nombres.mujer, ...d.accion.nombres.hombre];
-      html += '<div class="voz-box">' +
+      html += '<div class="voz-box' + (bloqueado ? ' voz-bloqueada' : '') + '" id="voz-box">' +
         '<p class="voz-titulo">Escolle o teu nome</p>' +
-        '<button class="btn-mic" id="btn-mic"' +
+        '<button class="btn-mic" id="btn-mic"' + (bloqueado ? ' disabled' : '') +
           ' onmousedown="empezarGrabacion()" onmouseup="pararGrabacion()"' +
           ' ontouchstart="event.preventDefault();empezarGrabacion()" ontouchend="event.preventDefault();pararGrabacion()"' +
           '>🎙️ Mantén pulsado e di un nome</button>' +
-        '<p id="estado-voz">Ou toca un dos nomes:</p>' +
+        '<p id="estado-voz">' + (bloqueado ? 'Escoita até o final...' : 'Ou toca un dos nomes:') + '</p>' +
         '<div class="nombres-grid">' +
-          todos.map(n => '<button class="btn-nombre" onclick="ejecutarAccion(\'nombre\',\'' + n + '\')">' + n + '</button>').join('') +
+          todos.map(n => '<button class="btn-nombre"' + (bloqueado ? ' disabled' : '') + ' onclick="ejecutarAccion(\'nombre\',\'' + n + '\')">' + n + '</button>').join('') +
         '</div>' +
       '</div>';
       accionActual = { tipo: 'nombre' };
     } else if (d.accion && d.accion.tipo === 'mic'){
-      html += '<div class="voz-box">' +
+      html += '<div class="voz-box' + (bloqueado ? ' voz-bloqueada' : '') + '" id="voz-box">' +
         (d.accion.instruccion ? '<p class="voz-titulo">' + escapar(d.accion.instruccion) + '</p>' : '') +
-        '<button class="btn-mic" id="btn-mic"' +
+        '<button class="btn-mic" id="btn-mic"' + (bloqueado ? ' disabled' : '') +
           ' onmousedown="empezarGrabacion()" onmouseup="pararGrabacion()"' +
           ' ontouchstart="event.preventDefault();empezarGrabacion()" ontouchend="event.preventDefault();pararGrabacion()"' +
           '>🎙️ Mantén pulsado e fala</button>' +
-        '<p id="estado-voz"></p>' +
+        '<p id="estado-voz">' + (bloqueado ? 'Escoita até o final...' : '') + '</p>' +
       '</div>';
       accionActual = { tipo: 'mic' };
     } else if (d.final){
@@ -419,7 +463,8 @@ async function abrirNodo(nodoKey){
     speechSynthesis.cancel();
     vocesPendientes = 0;
     autoAperturaPendiente = null; // este nodo ya se abrió; cualquier espera anterior queda obsoleta
-    (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i));
+    bloquesInicialesPendientes = (d.bloques || []).length;
+    (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i, true));
   }catch(e){
     cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
   }
