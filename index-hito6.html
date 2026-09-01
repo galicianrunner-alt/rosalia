@@ -71,6 +71,10 @@
   .btn-nombre:active{background:var(--oro);color:var(--verde-oscuro);}
   .btn-mic:disabled, .btn-nombre:disabled{opacity:.35;cursor:not-allowed;}
   .btn-volver:disabled{opacity:.3;cursor:not-allowed;}
+  .opciones-grid{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .btn-opcion{padding:13px;background:transparent;border:1px solid var(--oro);border-radius:10px;color:var(--oro);font-family:Georgia,serif;font-size:14px;cursor:pointer;}
+  .btn-opcion:active{background:var(--oro);color:var(--verde-oscuro);}
+  .btn-opcion:disabled{opacity:.35;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -139,6 +143,7 @@ let resonadorId = null;
 let misionActual = "presentacion";
 let mediaRecorder = null, trozosAudio = [];
 let accionActual = null; // { tipo, ... } de la etapa que se está mostrando ahora mismo
+let opcionesActuales = []; // opciones (botón + palabras clave) del paso de micrófono actual, si las hay
 let nodoAbierto = null; // qué nodo físico está abierto en pantalla ahora mismo
 let autoAbiertoPara = null; // "mision|nodo" ya abierto en automático, para no repetirlo en bucle
 let vocesPendientes = 0; // cuántas frases quedan por sonar del nodo actual
@@ -146,6 +151,10 @@ let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz 
 let bloquesInicialesPendientes = 0; // cuántos bloques de la narración propia de este nodo (la que suena al abrirlo) faltan por terminar
 let esPantallaFinal = false; // true solo en la pantalla de "Hito superado", para no volver sola al mapa ahí
 let rutaLinea = null, rutaFlecha = null; // capas del mapa: línea de puntos + flecha hacia el próximo nodo
+
+function quitarAcentos(s){
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -459,6 +468,7 @@ async function abrirNodo(nodoKey){
   cont.innerHTML = '<p class="cargando">Abrindo o canal co resonador...</p>';
   accionActual = null;
   esPantallaFinal = false;
+  opcionesActuales = [];
 
   try{
     const r = await fetch(WORKER + '/nodo-activo?id=' + encodeURIComponent(resonadorId) + '&nodo=' + encodeURIComponent(nodoKey));
@@ -496,6 +506,8 @@ async function abrirNodo(nodoKey){
       '</div>';
       accionActual = { tipo: 'nombre' };
     } else if (d.accion && d.accion.tipo === 'mic'){
+      const opciones = d.accion.opciones || [];
+      opcionesActuales = opciones;
       html += '<div class="voz-box' + (bloqueado ? ' voz-bloqueada' : '') + '" id="voz-box">' +
         (d.accion.instruccion ? '<p class="voz-titulo">' + escapar(d.accion.instruccion) + '</p>' : '') +
         '<button class="btn-mic" id="btn-mic"' + (bloqueado ? ' disabled' : '') +
@@ -503,6 +515,9 @@ async function abrirNodo(nodoKey){
           ' ontouchstart="event.preventDefault();empezarGrabacion()" ontouchend="event.preventDefault();pararGrabacion()"' +
           '>🎙️ Mantén pulsado e fala</button>' +
         '<p id="estado-voz">' + (bloqueado ? 'Escoita até o final...' : '') + '</p>' +
+        (opciones.length ? '<div class="opciones-grid">' +
+          opciones.map(op => '<button class="btn-opcion"' + (bloqueado ? ' disabled' : '') + ' onclick="ejecutarAccion(\'mic\',\'' + op.valor + '\')">' + escapar(op.etiqueta) + '</button>').join('') +
+        '</div>' : '') +
       '</div>';
       accionActual = { tipo: 'mic' };
     } else if (d.final){
@@ -570,10 +585,26 @@ async function procesarAudioGrabado(){
         if (estadoVoz) estadoVoz.textContent = 'Non recoñecín ningún nome' + (j.texto_oido ? ' ("' + j.texto_oido + '")' : '') + '. Proba outra vez ou toca un nome.';
       }
     } else {
-      // Acción genérica: basta con que se haya oído algo.
-      if (j.texto_oido && j.texto_oido.trim().length > 0){
-        if (estadoVoz) estadoVoz.textContent = 'Recibido: "' + j.texto_oido + '"';
-        await ejecutarAccion('mic', j.texto_oido);
+      // Acción de micrófono con opciones: no basta con que se oiga
+      // cualquier cosa — tiene que reconocerse alguna de las palabras
+      // clave de alguna opción (p. ej. "Saúl" o "porto"). Si no se
+      // reconoce ninguna, no se avanza solo; se avisa de que toque el
+      // botón de la opción a mano.
+      const textoOido = j.texto_oido || '';
+      if (opcionesActuales.length > 0){
+        const normalizado = quitarAcentos(textoOido.toLowerCase());
+        const opcion = opcionesActuales.find(op =>
+          (op.palabrasClave || []).some(clave => normalizado.includes(quitarAcentos(String(clave).toLowerCase())))
+        );
+        if (opcion){
+          if (estadoVoz) estadoVoz.textContent = 'Recibido: "' + textoOido + '"';
+          await ejecutarAccion('mic', opcion.valor);
+        } else {
+          if (estadoVoz) estadoVoz.textContent = 'O teu resonador non se recibe con claridade. Pulsa o botón da opción para continuar.';
+        }
+      } else if (textoOido.trim().length > 0){
+        if (estadoVoz) estadoVoz.textContent = 'Recibido: "' + textoOido + '"';
+        await ejecutarAccion('mic', textoOido);
       } else {
         if (estadoVoz) estadoVoz.textContent = 'Non se detectou ningunha voz. Proba outra vez.';
       }
