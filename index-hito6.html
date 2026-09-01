@@ -144,6 +144,8 @@ let autoAbiertoPara = null; // "mision|nodo" ya abierto en automático, para no 
 let vocesPendientes = 0; // cuántas frases quedan por sonar del nodo actual
 let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz para abrirse solo
 let bloquesInicialesPendientes = 0; // cuántos bloques de la narración propia de este nodo (la que suena al abrirlo) faltan por terminar
+let esPantallaFinal = false; // true solo en la pantalla de "Hito superado", para no volver sola al mapa ahí
+let rutaLinea = null, rutaFlecha = null; // capas del mapa: línea de puntos + flecha hacia el próximo nodo
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -182,21 +184,33 @@ function vozTerminada(){
 // os controis.
 function marcarBloqueInicialTerminado(){
   bloquesInicialesPendientes = Math.max(0, bloquesInicialesPendientes - 1);
-  if (bloquesInicialesPendientes === 0) habilitarAccion();
+  if (bloquesInicialesPendientes === 0) habilitarAccion(true);
 }
-function habilitarAccion(){
+// autoVolver=true solo cuando la narración terminó ela misma, de forma
+// natural (nunca cuando se interrumpió a mano con "Repetir": en ese caso
+// solo queremos desbloquear os controis, non saír da pantalla).
+function habilitarAccion(autoVolver){
   const btnVolver = document.getElementById('btn-volver');
   if (btnVolver) btnVolver.disabled = false;
   const caja = document.getElementById('voz-box');
-  if (!caja) return;
-  caja.classList.remove('voz-bloqueada');
-  caja.querySelectorAll('button').forEach(b => { b.disabled = false; });
-  if (accionActual && accionActual.tipo === 'nombre'){
-    const ev = document.getElementById('estado-voz');
-    if (ev) ev.textContent = 'Ou toca un dos nomes:';
-  } else {
-    const ev = document.getElementById('estado-voz');
-    if (ev && ev.textContent.indexOf('Escoita') === 0) ev.textContent = '';
+  if (caja){
+    caja.classList.remove('voz-bloqueada');
+    caja.querySelectorAll('button').forEach(b => { b.disabled = false; });
+    if (accionActual && accionActual.tipo === 'nombre'){
+      const ev = document.getElementById('estado-voz');
+      if (ev) ev.textContent = 'Ou toca un dos nomes:';
+    } else {
+      const ev = document.getElementById('estado-voz');
+      if (ev && ev.textContent.indexOf('Escoita') === 0) ev.textContent = '';
+    }
+  }
+  // Si este nodo non pedía ningunha acción (é un tránsito puro, sen
+  // micrófono nin nomes) e a narración rematou soa, non hai nada que
+  // facer aquí: volvemos ao mapa sen que o xogador teña que tocar nada,
+  // para que siga camiñando cara ao seguinte punto. A pantalla final de
+  // "Hito superado" queda fóra desta regra a propósito.
+  if (autoVolver && !accionActual && !esPantallaFinal){
+    volverAlMapa();
   }
 }
 function encolarHabla(texto, botonId, esInicial){
@@ -230,7 +244,7 @@ function hablar(texto, botonId){
   // bloqueados para sempre, liberámolos xa.
   if (bloquesInicialesPendientes > 0){
     bloquesInicialesPendientes = 0;
-    habilitarAccion();
+    habilitarAccion(false);
   }
   encolarHabla(texto, botonId, false);
 }
@@ -312,6 +326,38 @@ function initMapa(){
   actualizar();
 }
 
+// Rumbo (0º = norte, sentido horario) desde un punto a otro — para
+// orientar la flecha de la ruta hacia el próximo nodo.
+function calcularRumbo(la1,ln1,la2,ln2){
+  const toRad = g => g*Math.PI/180, toDeg = r => r*180/Math.PI;
+  const f1=toRad(la1), f2=toRad(la2), dL=toRad(ln2-ln1);
+  const y = Math.sin(dL)*Math.cos(f2);
+  const x = Math.cos(f1)*Math.sin(f2) - Math.sin(f1)*Math.cos(f2)*Math.cos(dL);
+  return (toDeg(Math.atan2(y,x)) + 360) % 360;
+}
+
+// Dibuja (y redibuja en cada actualización de posición) una línea de
+// puntos roja desde donde está el jugador hasta el próximo nodo, con una
+// pequeña flecha en el extremo señalando el punto exacto. Es una línea
+// recta (no sigue las calles), pensada solo como referencia visual de
+// hacia dónde tirar.
+function dibujarRuta(objetivo){
+  if (!mapa) return;
+  const desde = [posicion.lat, posicion.lng];
+  const hasta = [objetivo.lat, objetivo.lng];
+  if (rutaLinea) mapa.removeLayer(rutaLinea);
+  rutaLinea = L.polyline([desde, hasta], { color:'#D94F3D', weight:3, opacity:.85, dashArray:'2,10', lineCap:'round' }).addTo(mapa);
+
+  const rumbo = calcularRumbo(posicion.lat, posicion.lng, objetivo.lat, objetivo.lng);
+  if (rutaFlecha) mapa.removeLayer(rutaFlecha);
+  const icono = L.divIcon({
+    className:'',
+    html:'<div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:13px solid #D94F3D;transform:rotate('+rumbo+'deg);transform-origin:50% 65%;filter:drop-shadow(0 0 2px rgba(0,0,0,.6));"></div>',
+    iconSize:[13,13], iconAnchor:[6,6]
+  });
+  rutaFlecha = L.marker(hasta, { icon: icono, interactive:false, zIndexOffset:400 }).addTo(mapa);
+}
+
 function actualizar(){
   if(usuarioMarker) usuarioMarker.setLatLng([posicion.lat,posicion.lng]);
   const objetivoKey = OBJETIVO_POR_MISION[misionActual] || 'campillo';
@@ -351,6 +397,7 @@ function actualizar(){
     }
   }
 
+  dibujarRuta(objetivo);
   pintarAviso(dObjetivo<=RADIO ? Math.round(dObjetivo) : null, objetivo);
 }
 
@@ -411,6 +458,7 @@ async function abrirNodo(nodoKey){
   const cont = document.getElementById('n-contenido');
   cont.innerHTML = '<p class="cargando">Abrindo o canal co resonador...</p>';
   accionActual = null;
+  esPantallaFinal = false;
 
   try{
     const r = await fetch(WORKER + '/nodo-activo?id=' + encodeURIComponent(resonadorId) + '&nodo=' + encodeURIComponent(nodoKey));
@@ -459,6 +507,7 @@ async function abrirNodo(nodoKey){
       accionActual = { tipo: 'mic' };
     } else if (d.final){
       html += '<div class="ok-box">Hito 6 superado: Misión 1 completada con el guion real, en un nodo distinto al de la Presentación.</div>';
+      esPantallaFinal = true;
     }
 
     cont.innerHTML = html;
