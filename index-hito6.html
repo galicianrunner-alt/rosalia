@@ -55,7 +55,7 @@
   .btn-oir{background:none;border:1px solid var(--oro);color:var(--oro);border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:Georgia,serif;transition:background .2s,color .2s,box-shadow .2s;}
   .btn-oir:active{background:var(--oro);color:var(--verde-oscuro);}
   .btn-oir.hablando{background:var(--oro-vivo);color:var(--verde-oscuro);box-shadow:0 0 10px rgba(244,211,94,.8);}
-  .texto-cuerpo{color:var(--crema);font-size:15px;line-height:1.6;}
+  .texto-cuerpo{color:var(--crema);font-size:18px;line-height:1.65;}
   .cargando{color:rgba(245,239,224,.6);font-size:14px;font-style:italic;text-align:center;padding:20px;}
   .error-box{margin-top:12px;padding:14px;background:rgba(200,80,60,.15);border:1px dashed rgba(200,80,60,.5);border-radius:12px;color:#f0c9c0;font-size:13px;text-align:center;}
   .ok-box{margin-top:20px;padding:14px;background:rgba(244,211,94,.12);border:1px dashed rgba(244,211,94,.4);border-radius:12px;color:var(--oro-vivo);font-size:13px;text-align:center;font-style:italic;}
@@ -138,6 +138,7 @@ let misionActual = "presentacion";
 let mediaRecorder = null, trozosAudio = [];
 let accionActual = null; // { tipo, ... } de la etapa que se está mostrando ahora mismo
 let nodoAbierto = null; // qué nodo físico está abierto en pantalla ahora mismo
+let autoAbiertoPara = null; // "mision|nodo" ya abierto en automático, para no repetirlo en bucle
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -263,6 +264,21 @@ function actualizar(){
 
   const objetivo = NODOS[objetivoKey];
   const dObjetivo = distancia(posicion.lat,posicion.lng,objetivo.lat,objetivo.lng);
+
+  // Apertura automática: si entras en el radio del nodo que te toca (y no
+  // estás ya dentro de un nodo), se abre solo, sin que tengas que pulsar
+  // "Abrir". Solo se dispara UNA VEZ por etapa (guardado en autoAbiertoPara)
+  // para no reabrirse en bucle si te quedas parado ahí o vuelves al mapa
+  // por tu cuenta.
+  if (dObjetivo <= RADIO && nodoAbierto === null){
+    const combo = misionActual + '|' + objetivoKey;
+    if (autoAbiertoPara !== combo){
+      autoAbiertoPara = combo;
+      abrirNodo(objetivoKey);
+      return;
+    }
+  }
+
   pintarAviso(dObjetivo<=RADIO ? Math.round(dObjetivo) : null, objetivo);
 }
 
