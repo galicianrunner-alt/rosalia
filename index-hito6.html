@@ -139,6 +139,8 @@ let mediaRecorder = null, trozosAudio = [];
 let accionActual = null; // { tipo, ... } de la etapa que se está mostrando ahora mismo
 let nodoAbierto = null; // qué nodo físico está abierto en pantalla ahora mismo
 let autoAbiertoPara = null; // "mision|nodo" ya abierto en automático, para no repetirlo en bucle
+let vocesPendientes = 0; // cuántas frases quedan por sonar del nodo actual
+let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz para abrirse solo
 
 function elegirVoz(){
   if (!('speechSynthesis' in window)) return null;
@@ -150,6 +152,25 @@ function elegirVoz(){
   }
   return voces[0] || null;
 }
+// Se llama cada vez que termina (o falla) una frase. Cuando ya no queda
+// ninguna voz sonando, comprueba si había una apertura automática en
+// espera (porque llegamos a un nodo nuevo mientras aún hablaba el
+// anterior) y, si seguimos dentro del radio de ese nodo, la dispara ahora.
+function vozTerminada(){
+  vocesPendientes = Math.max(0, vocesPendientes - 1);
+  if (vocesPendientes > 0 || !autoAperturaPendiente || nodoAbierto !== null) return;
+  const combo = autoAperturaPendiente;
+  autoAperturaPendiente = null;
+  const [misionCombo, nodoCombo] = combo.split('|');
+  if (misionCombo !== misionActual) return; // la etapa cambió mientras esperábamos
+  const n = NODOS[nodoCombo];
+  if (!n) return;
+  const d = distancia(posicion.lat, posicion.lng, n.lat, n.lng);
+  if (d <= RADIO){
+    autoAbiertoPara = combo;
+    abrirNodo(nodoCombo);
+  }
+}
 function encolarHabla(texto, botonId){
   if (!texto || !('speechSynthesis' in window)) return;
   try{
@@ -158,17 +179,17 @@ function encolarHabla(texto, botonId){
     if (voz){ utter.voice = voz; utter.lang = voz.lang; }
     else { utter.lang = 'es-ES'; }
     utter.rate = 0.95;
-    if (botonId){
-      utter.onstart = () => { const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); };
-      utter.onend   = () => { const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); };
-      utter.onerror = () => { const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); };
-    }
+    vocesPendientes++;
+    utter.onstart = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); } };
+    utter.onend   = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); };
+    utter.onerror = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); };
     speechSynthesis.speak(utter);
   }catch(e){}
 }
 function hablar(texto, botonId){
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
+  vocesPendientes = 0;
   encolarHabla(texto, botonId);
 }
 
@@ -269,29 +290,54 @@ function actualizar(){
   // estás ya dentro de un nodo), se abre solo, sin que tengas que pulsar
   // "Abrir". Solo se dispara UNA VEZ por etapa (guardado en autoAbiertoPara)
   // para no reabrirse en bucle si te quedas parado ahí o vuelves al mapa
-  // por tu cuenta.
+  // por tu cuenta. Y si todavía está sonando la narración del nodo
+  // anterior (p. ej. el tránsito, que es largo y puede que aún no haya
+  // terminado cuando llegas caminando), NO la cortamos: se deja marcada
+  // como pendiente y se abrirá sola en cuanto esa voz calle (ver
+  // vozTerminada). Mientras tanto NO se ofrece forma de adelantarse
+  // (ver esperandoNarracionDe): nunca se pierde historia.
   if (dObjetivo <= RADIO && nodoAbierto === null){
     const combo = misionActual + '|' + objetivoKey;
     if (autoAbiertoPara !== combo){
-      autoAbiertoPara = combo;
-      abrirNodo(objetivoKey);
-      return;
+      if (vocesPendientes > 0){
+        autoAperturaPendiente = combo;
+      } else {
+        autoAbiertoPara = combo;
+        abrirNodo(objetivoKey);
+        return;
+      }
     }
   }
 
   pintarAviso(dObjetivo<=RADIO ? Math.round(dObjetivo) : null, objetivo);
 }
 
+// Mientras la narración de llegada a un nodo está pendiente de sonar (o
+// sonando), no se ofrece forma de adelantarse: ni botón "Abrir" en el
+// aviso, ni marcador tocable en el mapa. Así nunca se pierde historia.
+function esperandoNarracionDe(nodoKey){
+  return vocesPendientes > 0 && autoAperturaPendiente === (misionActual + '|' + nodoKey);
+}
+
 function pintarAviso(dist, objetivo){
   const z=document.getElementById('zona-aviso');
   if(dist!==null){
-    z.innerHTML='<div class="aviso"><div style="flex:1"><p class="aviso-label">Estás cerca do teu próximo punto</p><p class="aviso-nombre">'+objetivo.nombre+'</p><p class="aviso-dist">a '+dist+' metros</p></div><button class="aviso-btn" onclick="intentarAbrir(\''+objetivo.key+'\')">Abrir</button></div>';
+    if (esperandoNarracionDe(objetivo.key)){
+      z.innerHTML='<div class="aviso"><div style="flex:1"><p class="aviso-label">Chegaches a</p><p class="aviso-nombre">'+objetivo.nombre+'</p><p class="aviso-dist">Agarda un intre... está a rematar de falar</p></div></div>';
+    } else {
+      z.innerHTML='<div class="aviso"><div style="flex:1"><p class="aviso-label">Estás cerca do teu próximo punto</p><p class="aviso-nombre">'+objetivo.nombre+'</p><p class="aviso-dist">a '+dist+' metros</p></div><button class="aviso-btn" onclick="intentarAbrir(\''+objetivo.key+'\')">Abrir</button></div>';
+    }
   } else {
     z.innerHTML='<div class="aviso-vacio">Diríxete a '+objetivo.nombre+' (o dourado no mapa)</div>';
   }
 }
 
 function intentarAbrir(nodoKey){
+  if (esperandoNarracionDe(nodoKey)){
+    const z=document.getElementById('zona-aviso');
+    z.innerHTML='<div class="aviso-vacio">Agarda un intre... está a rematar de falar</div>';
+    return;
+  }
   const objetivoKey = OBJETIVO_POR_MISION[misionActual] || 'campillo';
   const n = NODOS[nodoKey];
   const d = distancia(posicion.lat,posicion.lng,n.lat,n.lng);
@@ -371,6 +417,8 @@ async function abrirNodo(nodoKey){
     cont.innerHTML = html;
 
     speechSynthesis.cancel();
+    vocesPendientes = 0;
+    autoAperturaPendiente = null; // este nodo ya se abrió; cualquier espera anterior queda obsoleta
     (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i));
   }catch(e){
     cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
@@ -464,6 +512,7 @@ function escapar(t){ const d=document.createElement('div'); d.textContent=t; ret
 
 async function volverAlMapa(){
   speechSynthesis.cancel();
+  vocesPendientes = 0;
   nodoAbierto = null;
   document.getElementById('pantalla-nodo').classList.remove('activa');
   document.getElementById('pantalla-mapa').classList.add('activa');
