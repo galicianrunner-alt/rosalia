@@ -70,6 +70,7 @@
   .btn-nombre{padding:11px;background:transparent;border:1px solid var(--oro);border-radius:10px;color:var(--oro);font-family:Georgia,serif;font-size:13px;cursor:pointer;}
   .btn-nombre:active{background:var(--oro);color:var(--verde-oscuro);}
   .btn-mic:disabled, .btn-nombre:disabled{opacity:.35;cursor:not-allowed;}
+  .btn-volver:disabled{opacity:.3;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -103,7 +104,7 @@
     <div id="n-contenido">
       <p class="cargando">Abrindo o canal co resonador...</p>
     </div>
-    <button class="btn-volver" onclick="volverAlMapa()">← Volver al mapa</button>
+    <button class="btn-volver" id="btn-volver" onclick="volverAlMapa()">← Volver al mapa</button>
   </div>
 
 </div></div>
@@ -184,6 +185,8 @@ function marcarBloqueInicialTerminado(){
   if (bloquesInicialesPendientes === 0) habilitarAccion();
 }
 function habilitarAccion(){
+  const btnVolver = document.getElementById('btn-volver');
+  if (btnVolver) btnVolver.disabled = false;
   const caja = document.getElementById('voz-box');
   if (!caja) return;
   caja.classList.remove('voz-bloqueada');
@@ -459,6 +462,12 @@ async function abrirNodo(nodoKey){
     }
 
     cont.innerHTML = html;
+
+    // Mientras habla el propio nodo, tampoco se puede escapar hacia el mapa:
+    // así no hay ningún atajo (ni micrófono, ni nombres, ni "Volver al
+    // mapa") que permita perderse la narración que se acaba de abrir.
+    const btnVolver = document.getElementById('btn-volver');
+    if (btnVolver) btnVolver.disabled = bloqueado;
 
     speechSynthesis.cancel();
     vocesPendientes = 0;
