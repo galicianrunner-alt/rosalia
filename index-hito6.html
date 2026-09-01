@@ -75,6 +75,9 @@
   .btn-opcion{padding:13px;background:transparent;border:1px solid var(--oro);border-radius:10px;color:var(--oro);font-family:Georgia,serif;font-size:14px;cursor:pointer;}
   .btn-opcion:active{background:var(--oro);color:var(--verde-oscuro);}
   .btn-opcion:disabled{opacity:.35;cursor:not-allowed;}
+
+  .btn-toggle-mapa{position:absolute;bottom:96px;right:16px;z-index:500;padding:11px 18px;background:var(--oro);color:var(--verde-oscuro);border:none;border-radius:24px;font-family:Georgia,serif;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);max-width:220px;}
+  .btn-toggle-mapa[hidden]{display:none;}
 </style>
 </head>
 <body>
@@ -111,6 +114,8 @@
     <button class="btn-volver" id="btn-volver" onclick="volverAlMapa()">← Volver al mapa</button>
   </div>
 
+  <button class="btn-toggle-mapa" id="btn-toggle-mapa" onclick="alternarMapaWaypoint()" hidden>🗺️ Ver mapa</button>
+
 </div></div>
 
 <script>
@@ -120,10 +125,12 @@
 // ║  ilumina en dorado el nodo al que le toca ir al jugador según     ║
 // ║  su etapa actual (consultada en /estado); el resto del             ║
 // ║  contenido y las acciones se piden a /nodo-activo y /accion.       ║
-// ║  Novedad: algunos bloques de narración llevan "mapaDurante"        ║
-// ║  (un punto intermedio, p. ej. as Cinco Calles) — mientras suenan,   ║
-// ║  la pantalla cambia sola al mapa con la flecha hacia ese punto,     ║
-// ║  y vuelve sola a la pantalla de texto en cuanto acaban.             ║
+// ║  Novedad: algunos bloques de narración llevan "mapaDurante" (un     ║
+// ║  punto intermedio, p. ej. as Cinco Calles). Mientras suenan, aparece ║
+// ║  un botón flotante "Ver mapa" para quien quiera orientarse; el       ║
+// ║  texto se queda a la vista por defecto, para quien prefiera leerlo.  ║
+// ║  Si el jugador abrió el mapa con ese botón, se vuelve solo al texto  ║
+// ║  en cuanto la frase termina, para no perderse lo que venga después.  ║
 // ╚══════════════════════════════════════════════════════════════╝
 const WORKER = "https://orbe-activo-hito1.galicianrunner.workers.dev";
 
@@ -161,7 +168,8 @@ let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz 
 let bloquesInicialesPendientes = 0; // cuántos bloques de la narración propia de este nodo (la que suena al abrirlo) faltan por terminar
 let esPantallaFinal = false; // true solo en la pantalla de "Hito superado", para no volver sola al mapa ahí
 let rutaLinea = null, rutaFlecha = null; // capas del mapa: línea de puntos + flecha hacia el próximo nodo
-let mapaEspecialActivo = null; // {lat,lng,nombre} cuando el mapa se muestra solo, a media narración, señalando un punto intermedio
+let waypointDisponible = null; // {lat,lng,nombre} mientras suena un bloque con "mapaDurante": el botón de alternar mapa/texto aparece
+let viendoMapaWaypoint = false; // true cuando el jugador, con el botón, decidió ver el mapa en vez del texto durante ese bloque
 
 function quitarAcentos(s){
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -177,13 +185,17 @@ function elegirVoz(){
   }
   return voces[0] || null;
 }
+// Se llama cada vez que termina (o falla) una frase. Cuando ya no queda
+// ninguna voz sonando, comprueba si había una apertura automática en
+// espera (porque llegamos a un nodo nuevo mientras aún hablaba el
+// anterior) y, si seguimos dentro del radio de ese nodo, la dispara ahora.
 function vozTerminada(){
   vocesPendientes = Math.max(0, vocesPendientes - 1);
   if (vocesPendientes > 0 || !autoAperturaPendiente || nodoAbierto !== null) return;
   const combo = autoAperturaPendiente;
   autoAperturaPendiente = null;
   const [misionCombo, nodoCombo] = combo.split('|');
-  if (misionCombo !== misionActual) return;
+  if (misionCombo !== misionActual) return; // la etapa cambió mientras esperábamos
   const n = NODOS[nodoCombo];
   if (!n) return;
   const d = distancia(posicion.lat, posicion.lng, n.lat, n.lng);
@@ -192,10 +204,19 @@ function vozTerminada(){
     abrirNodo(nodoCombo);
   }
 }
+// Mientras suenan los bloques propios de un nodo recién abierto, el botón
+// de micrófono (y los de escoller nome) están desactivados: así el
+// xogador non pode falar ou escoller antes de escoitar o que ten que dicir.
+// Esta función se avisa cando remata cada bloque "inicial" (ver
+// encolarHabla, parámetro esInicial) e, en canto non queda ningún, activa
+// os controis.
 function marcarBloqueInicialTerminado(){
   bloquesInicialesPendientes = Math.max(0, bloquesInicialesPendientes - 1);
   if (bloquesInicialesPendientes === 0) habilitarAccion(true);
 }
+// autoVolver=true solo cuando la narración terminó ela misma, de forma
+// natural (nunca cuando se interrumpió a mano con "Repetir": en ese caso
+// solo queremos desbloquear os controis, non saír da pantalla).
 function habilitarAccion(autoVolver){
   const btnVolver = document.getElementById('btn-volver');
   if (btnVolver) btnVolver.disabled = false;
@@ -211,10 +232,22 @@ function habilitarAccion(autoVolver){
       if (ev && ev.textContent.indexOf('Escoita') === 0) ev.textContent = '';
     }
   }
+  // Si este nodo non pedía ningunha acción (é un tránsito puro, sen
+  // micrófono nin nomes) e a narración rematou soa, non hai nada que
+  // facer aquí: volvemos ao mapa sen que o xogador teña que tocar nada,
+  // para que siga camiñando cara ao seguinte punto. A pantalla final de
+  // "Hito superado" queda fóra desta regra a propósito.
   if (autoVolver && !accionActual && !esPantallaFinal){
     volverAlMapa();
   }
 }
+// mapaDurante (opcional): {lat,lng,nombre} de un punto intermedio. Si se
+// pasa, mientras ESTA frase concreta suena aparece un botón flotante
+// ("Ver mapa") para que quien quiera vea la ruta hacia ese punto, sin
+// obligar a nadie: el texto se queda a la vista por defecto para quien
+// prefiera leerlo mientras escucha. Si el jugador llega a abrir el mapa
+// con ese botón y la frase termina, se vuelve solo al texto (para no
+// perderse lo que venga después, como los botones de decisión).
 function encolarHabla(texto, botonId, esInicial, mapaDurante){
   if (!texto || !('speechSynthesis' in window)){
     if (esInicial) marcarBloqueInicialTerminado();
@@ -229,16 +262,22 @@ function encolarHabla(texto, botonId, esInicial, mapaDurante){
     vocesPendientes++;
     utter.onstart = () => {
       if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); }
-      if (mapaDurante) mostrarMapaEspecial(mapaDurante);
+      if (mapaDurante){ waypointDisponible = mapaDurante; actualizarBotonToggle(); }
     };
     utter.onend   = () => {
       if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); }
-      if (mapaDurante) ocultarMapaEspecial();
+      if (mapaDurante){
+        waypointDisponible = null;
+        if (viendoMapaWaypoint) volverATextoWaypoint(); else actualizarBotonToggle();
+      }
       vozTerminada(); if (esInicial) marcarBloqueInicialTerminado();
     };
     utter.onerror = () => {
       if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); }
-      if (mapaDurante) ocultarMapaEspecial();
+      if (mapaDurante){
+        waypointDisponible = null;
+        if (viendoMapaWaypoint) volverATextoWaypoint(); else actualizarBotonToggle();
+      }
       vozTerminada(); if (esInicial) marcarBloqueInicialTerminado();
     };
     speechSynthesis.speak(utter);
@@ -251,28 +290,50 @@ function hablar(texto, botonId){
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   vocesPendientes = 0;
+  // Si alguien pulsa "Repetir" mientras aún esperábamos a que acabase la
+  // narración inicial del nodo, esa espera ya no se puede completar de
+  // forma natural (acabamos de cortarla). Para no dejar los controis
+  // bloqueados para sempre, liberámolos xa.
   if (bloquesInicialesPendientes > 0){
     bloquesInicialesPendientes = 0;
     habilitarAccion(false);
   }
+  // Al repetir a mano no reactivamos el botón de mapa —así no hay
+  // sorpresas si se pulsa "Repetir" estando ya de vuelta en el nodo.
   encolarHabla(texto, botonId, false, null);
 }
 
-function mostrarMapaEspecial(obj){
-  if (!obj || !mapa) return;
-  mapaEspecialActivo = obj;
+// Botón flotante que alterna entre la pantalla de texto y la de mapa
+// mientras hay un punto intermedio disponible (waypointDisponible). El
+// jugador decide: por defecto se queda en el texto, y solo ve el mapa si
+// lo pide.
+function actualizarBotonToggle(){
+  const b = document.getElementById('btn-toggle-mapa');
+  if (!b) return;
+  if (!waypointDisponible){ b.hidden = true; return; }
+  b.hidden = false;
+  b.textContent = viendoMapaWaypoint ? '📜 Ver texto' : ('🗺️ Ver mapa cara a ' + waypointDisponible.nombre);
+}
+function mostrarMapaWaypoint(){
+  if (!waypointDisponible || !mapa) return;
+  viendoMapaWaypoint = true;
   document.getElementById('pantalla-nodo').classList.remove('activa');
   document.getElementById('pantalla-mapa').classList.add('activa');
-  document.getElementById('instruccion').textContent = 'Segue camiñando cara a ' + obj.nombre + '...';
-  document.getElementById('zona-aviso').innerHTML = '<div class="aviso-vacio">Escoitando... continúa cara a ' + obj.nombre + '</div>';
-  setTimeout(()=>{ if(mapa) mapa.invalidateSize(); dibujarRuta(obj); }, 150);
+  document.getElementById('instruccion').textContent = 'Vas cara a ' + waypointDisponible.nombre + '...';
+  document.getElementById('zona-aviso').innerHTML = '<div class="aviso-vacio">Segue escoitando... vas cara a ' + waypointDisponible.nombre + '</div>';
+  setTimeout(()=>{ if(mapa) mapa.invalidateSize(); dibujarRuta(waypointDisponible); }, 150);
+  actualizarBotonToggle();
 }
-function ocultarMapaEspecial(){
-  mapaEspecialActivo = null;
+function volverATextoWaypoint(){
+  viendoMapaWaypoint = false;
   document.getElementById('pantalla-mapa').classList.remove('activa');
   document.getElementById('pantalla-nodo').classList.add('activa');
   const instr = document.getElementById('instruccion');
   if (instr) instr.textContent = modoGPS ? 'Usando tu GPS real — camina por la ciudad' : 'Toca el mapa para moverte — simula caminar por la ciudad';
+  actualizarBotonToggle();
+}
+function alternarMapaWaypoint(){
+  if (viendoMapaWaypoint) volverATextoWaypoint(); else mostrarMapaWaypoint();
 }
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
@@ -307,7 +368,7 @@ async function consultarEstado(){
     const r = await fetch(WORKER + '/estado?id=' + encodeURIComponent(resonadorId));
     const d = await r.json();
     misionActual = d.mision || 'presentacion';
-  }catch(e){ }
+  }catch(e){ /* si falla, se queda con la última etapa conocida */ }
 }
 
 function distancia(la1,ln1,la2,ln2){
@@ -352,6 +413,8 @@ function initMapa(){
   actualizar();
 }
 
+// Rumbo (0º = norte, sentido horario) desde un punto a otro — para
+// orientar la flecha de la ruta hacia el próximo nodo.
 function calcularRumbo(la1,ln1,la2,ln2){
   const toRad = g => g*Math.PI/180, toDeg = r => r*180/Math.PI;
   const f1=toRad(la1), f2=toRad(la2), dL=toRad(ln2-ln1);
@@ -360,6 +423,11 @@ function calcularRumbo(la1,ln1,la2,ln2){
   return (toDeg(Math.atan2(y,x)) + 360) % 360;
 }
 
+// Dibuja (y redibuja en cada actualización de posición) una línea de
+// puntos roja desde donde está el jugador hasta el próximo nodo, con una
+// pequeña flecha en el extremo señalando el punto exacto. Es una línea
+// recta (no sigue las calles), pensada solo como referencia visual de
+// hacia dónde tirar.
 function dibujarRuta(objetivo){
   if (!mapa) return;
   const desde = [posicion.lat, posicion.lng];
@@ -380,8 +448,13 @@ function dibujarRuta(objetivo){
 function actualizar(){
   if(usuarioMarker) usuarioMarker.setLatLng([posicion.lat,posicion.lng]);
 
-  if (mapaEspecialActivo){
-    dibujarRuta(mapaEspecialActivo);
+  // Mientras el jugador está viendo el mapa del punto intermedio (lo pidió
+  // con el botón flotante), no tocamos nada de la lógica normal de nodos:
+  // solo movemos o xogador e redebuxamos a ruta cara a ese punto. Cando
+  // volva ao texto (a man ou porque a frase remate), actualizar() segue
+  // funcionando coma sempre.
+  if (viendoMapaWaypoint){
+    dibujarRuta(waypointDisponible);
     return;
   }
 
@@ -399,6 +472,16 @@ function actualizar(){
   const objetivo = NODOS[objetivoKey];
   const dObjetivo = distancia(posicion.lat,posicion.lng,objetivo.lat,objetivo.lng);
 
+  // Apertura automática: si entras en el radio del nodo que te toca (y no
+  // estás ya dentro de un nodo), se abre solo, sin que tengas que pulsar
+  // "Abrir". Solo se dispara UNA VEZ por etapa (guardado en autoAbiertoPara)
+  // para no reabrirse en bucle si te quedas parado ahí o vuelves al mapa
+  // por tu cuenta. Y si todavía está sonando la narración del nodo
+  // anterior (p. ej. el tránsito, que es largo y puede que aún no haya
+  // terminado cuando llegas caminando), NO la cortamos: se deja marcada
+  // como pendiente y se abrirá sola en cuanto esa voz calle (ver
+  // vozTerminada). Mientras tanto, el botón "Abrir" del aviso sigue
+  // disponible por si el jugador prefiere adelantarse.
   if (dObjetivo <= RADIO && nodoAbierto === null){
     const combo = misionActual + '|' + objetivoKey;
     if (autoAbiertoPara !== combo){
@@ -416,6 +499,9 @@ function actualizar(){
   pintarAviso(dObjetivo<=RADIO ? Math.round(dObjetivo) : null, objetivo);
 }
 
+// Mientras la narración de llegada a un nodo está pendiente de sonar (o
+// sonando), no se ofrece forma de adelantarse: ni botón "Abrir" en el
+// aviso, ni marcador tocable en el mapa. Así nunca se pierde historia.
 function esperandoNarracionDe(nodoKey){
   return vocesPendientes > 0 && autoAperturaPendiente === (misionActual + '|' + nodoKey);
 }
@@ -434,7 +520,7 @@ function pintarAviso(dist, objetivo){
 }
 
 function intentarAbrir(nodoKey){
-  if (mapaEspecialActivo) return;
+  if (viendoMapaWaypoint) return; // no interrumpir mientras se está mirando el mapa del punto intermedio
   if (esperandoNarracionDe(nodoKey)){
     const z=document.getElementById('zona-aviso');
     z.innerHTML='<div class="aviso-vacio">Agarda un intre... está a rematar de falar</div>';
@@ -473,7 +559,9 @@ async function abrirNodo(nodoKey){
   accionActual = null;
   esPantallaFinal = false;
   opcionesActuales = [];
-  mapaEspecialActivo = null;
+  waypointDisponible = null;
+  viendoMapaWaypoint = false;
+  actualizarBotonToggle();
 
   try{
     const r = await fetch(WORKER + '/nodo-activo?id=' + encodeURIComponent(resonadorId) + '&nodo=' + encodeURIComponent(nodoKey));
@@ -491,6 +579,10 @@ async function abrirNodo(nodoKey){
         '<p class="texto-cuerpo">' + escapar(b.texto) + '</p></div>';
     });
 
+    // Mientras los bloques de texto de este nodo aún no han terminado de
+    // sonar, el micrófono y los nombres se muestran desactivados: primero
+    // se escucha, luego se actúa. En cuanto acaban (marcarBloqueInicialTerminado
+    // llega a 0), habilitarAccion() los activa solo, sin recargar nada.
     const bloqueado = (d.bloques || []).length > 0;
     if (d.accion && d.accion.tipo === 'nombre'){
       const todos = [...d.accion.nombres.mujer, ...d.accion.nombres.hombre];
@@ -528,12 +620,15 @@ async function abrirNodo(nodoKey){
 
     cont.innerHTML = html;
 
+    // Mientras habla el propio nodo, tampoco se puede escapar hacia el mapa:
+    // así no hay ningún atajo (ni micrófono, ni nombres, ni "Volver al
+    // mapa") que permita perderse la narración que se acaba de abrir.
     const btnVolver = document.getElementById('btn-volver');
     if (btnVolver) btnVolver.disabled = bloqueado;
 
     speechSynthesis.cancel();
     vocesPendientes = 0;
-    autoAperturaPendiente = null;
+    autoAperturaPendiente = null; // este nodo ya se abrió; cualquier espera anterior queda obsoleta
     bloquesInicialesPendientes = (d.bloques || []).length;
     (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i, true, b.mapaDurante || null));
   }catch(e){
@@ -583,6 +678,11 @@ async function procesarAudioGrabado(){
         if (estadoVoz) estadoVoz.textContent = 'Non recoñecín ningún nome' + (j.texto_oido ? ' ("' + j.texto_oido + '")' : '') + '. Proba outra vez ou toca un nome.';
       }
     } else {
+      // Acción de micrófono con opciones: no basta con que se oiga
+      // cualquier cosa — tiene que reconocerse alguna de las palabras
+      // clave de alguna opción (p. ej. "Saúl" o "porto"). Si no se
+      // reconoce ninguna, no se avanza solo; se avisa de que toque el
+      // botón de la opción a mano.
       const textoOido = j.texto_oido || '';
       if (opcionesActuales.length > 0){
         const normalizado = quitarAcentos(textoOido.toLowerCase());
@@ -620,6 +720,11 @@ async function ejecutarAccion(tipo, valor){
       return;
     }
     misionActual = j.estado.mision;
+    // Siempre nos quedamos en el mismo nodo mostrando lo que toca a
+    // continuación (aunque el próximo objetivo esté en otro sitio):
+    // así nunca nos saltamos texto del guion. El jugador vuelve al
+    // mapa él mismo, con el botón "Volver al mapa", cuando ya leyó/oyó
+    // todo y le toca caminar a otro nodo.
     if (nodoAbierto){
       abrirNodo(nodoAbierto);
     } else {
