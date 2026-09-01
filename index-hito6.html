@@ -429,12 +429,12 @@ async function ejecutarAccion(tipo, valor){
       return;
     }
     misionActual = j.estado.mision;
-    // Si la siguiente etapa sigue tocando en el MISMO nodo físico donde
-    // estamos, no hace falta pasar por el mapa: seguimos aquí mismo.
-    // Solo volvemos al mapa cuando la siguiente etapa toca en otro nodo
-    // (porque entonces sí hay que caminar hasta él).
-    const nuevoObjetivo = OBJETIVO_POR_MISION[misionActual] || 'campillo';
-    if (nodoAbierto && nuevoObjetivo === nodoAbierto){
+    // Siempre nos quedamos en el mismo nodo mostrando lo que toca a
+    // continuación (aunque el próximo objetivo esté en otro sitio):
+    // así nunca nos saltamos texto del guion. El jugador vuelve al
+    // mapa él mismo, con el botón "Volver al mapa", cuando ya leyó/oyó
+    // todo y le toca caminar a otro nodo.
+    if (nodoAbierto){
       abrirNodo(nodoAbierto);
     } else {
       volverAlMapa();
