@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>El Orbe Activo — Hito 6 (Misión 1 real)</title>
+<title>El Orbe Activo — Hito 7 (Misións 2 e 3)</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>
   :root{
@@ -83,7 +83,7 @@
   <div id="bienvenida" class="pantalla activa">
     <div class="hada">✦</div>
     <h1>El Orbe Activo</h1>
-    <p class="subt">Prototipo — Hito 6: Misión 1 real</p>
+    <p class="subt">Prototipo — Hito 7: Misións 2 e 3</p>
     <p class="intro" id="estado-conexion">Conectando con el resonador...</p>
     <button class="btn-grande" id="btn-empezar" onclick="irAMapa()" disabled>Empezar la prueba</button>
     <button class="btn-gps" style="margin-top:12px;width:100%" onclick="reiniciarSesion()">🔄 Reiniciar sesión (empezar de cero)</button>
@@ -91,7 +91,7 @@
 
   <div id="pantalla-mapa" class="pantalla">
     <div class="cabecera">
-      <span class="cab-titulo">Prueba de dos nodos</span>
+      <span class="cab-titulo">Prueba de cuatro nodos</span>
       <span class="estado" id="estado-txt">—</span>
     </div>
     <div id="mapa"></div>
@@ -115,22 +115,32 @@
 
 <script>
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  HITO 6 — dos nodos reales y la Misión 1 completa. El mapa       ║
+// ║  HITO 7 — cuatro nodos reales: Campillo, Prateria (M1),           ║
+// ║  Enfesta de San Telmo (M2) y Praza do Peirao (M3). El mapa        ║
 // ║  ilumina en dorado el nodo al que le toca ir al jugador según     ║
 // ║  su etapa actual (consultada en /estado); el resto del             ║
 // ║  contenido y las acciones se piden a /nodo-activo y /accion.       ║
+// ║  Novedad: algunos bloques de narración llevan "mapaDurante"        ║
+// ║  (un punto intermedio, p. ej. as Cinco Calles) — mientras suenan,   ║
+// ║  la pantalla cambia sola al mapa con la flecha hacia ese punto,     ║
+// ║  y vuelve sola a la pantalla de texto en cuanto acaban.             ║
 // ╚══════════════════════════════════════════════════════════════╝
 const WORKER = "https://orbe-activo-hito1.galicianrunner.workers.dev";
 
 const NODOS = {
   campillo: { key: "campillo", nombre: "Campillo de Santa María", lat: 42.434118, lng: -8.647704 },
-  prateria: { key: "prateria", nombre: "Praza da Prateria Vella", lat: 42.434285, lng: -8.646736 }
+  prateria: { key: "prateria", nombre: "Praza da Prateria Vella", lat: 42.434285, lng: -8.646736 },
+  enfesta: { key: "enfesta", nombre: "Enfesta de San Telmo", lat: 42.434521, lng: -8.646264 },
+  peirao: { key: "peirao", nombre: "Praza do Peirao", lat: 42.434827, lng: -8.645607 }
 };
 const OBJETIVO_POR_MISION = {
   presentacion: "campillo",
   resonador: "campillo",
   camino_m1: "prateria",
-  m1_completa: "prateria"
+  camino_m2: "enfesta",
+  m2_transito: "peirao",
+  m3_trampa: "peirao",
+  m3_final: "peirao"
 };
 
 const RADIO = 30;
@@ -151,6 +161,7 @@ let autoAperturaPendiente = null; // "mision|nodo" esperando a que calle la voz 
 let bloquesInicialesPendientes = 0; // cuántos bloques de la narración propia de este nodo (la que suena al abrirlo) faltan por terminar
 let esPantallaFinal = false; // true solo en la pantalla de "Hito superado", para no volver sola al mapa ahí
 let rutaLinea = null, rutaFlecha = null; // capas del mapa: línea de puntos + flecha hacia el próximo nodo
+let mapaEspecialActivo = null; // {lat,lng,nombre} cuando el mapa se muestra solo, a media narración, señalando un punto intermedio
 
 function quitarAcentos(s){
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -166,17 +177,13 @@ function elegirVoz(){
   }
   return voces[0] || null;
 }
-// Se llama cada vez que termina (o falla) una frase. Cuando ya no queda
-// ninguna voz sonando, comprueba si había una apertura automática en
-// espera (porque llegamos a un nodo nuevo mientras aún hablaba el
-// anterior) y, si seguimos dentro del radio de ese nodo, la dispara ahora.
 function vozTerminada(){
   vocesPendientes = Math.max(0, vocesPendientes - 1);
   if (vocesPendientes > 0 || !autoAperturaPendiente || nodoAbierto !== null) return;
   const combo = autoAperturaPendiente;
   autoAperturaPendiente = null;
   const [misionCombo, nodoCombo] = combo.split('|');
-  if (misionCombo !== misionActual) return; // la etapa cambió mientras esperábamos
+  if (misionCombo !== misionActual) return;
   const n = NODOS[nodoCombo];
   if (!n) return;
   const d = distancia(posicion.lat, posicion.lng, n.lat, n.lng);
@@ -185,19 +192,10 @@ function vozTerminada(){
     abrirNodo(nodoCombo);
   }
 }
-// Mientras suenan los bloques propios de un nodo recién abierto, el botón
-// de micrófono (y los de escoller nome) están desactivados: así el
-// xogador non pode falar ou escoller antes de escoitar o que ten que dicir.
-// Esta función se avisa cando remata cada bloque "inicial" (ver
-// encolarHabla, parámetro esInicial) e, en canto non queda ningún, activa
-// os controis.
 function marcarBloqueInicialTerminado(){
   bloquesInicialesPendientes = Math.max(0, bloquesInicialesPendientes - 1);
   if (bloquesInicialesPendientes === 0) habilitarAccion(true);
 }
-// autoVolver=true solo cuando la narración terminó ela misma, de forma
-// natural (nunca cuando se interrumpió a mano con "Repetir": en ese caso
-// solo queremos desbloquear os controis, non saír da pantalla).
 function habilitarAccion(autoVolver){
   const btnVolver = document.getElementById('btn-volver');
   if (btnVolver) btnVolver.disabled = false;
@@ -213,16 +211,11 @@ function habilitarAccion(autoVolver){
       if (ev && ev.textContent.indexOf('Escoita') === 0) ev.textContent = '';
     }
   }
-  // Si este nodo non pedía ningunha acción (é un tránsito puro, sen
-  // micrófono nin nomes) e a narración rematou soa, non hai nada que
-  // facer aquí: volvemos ao mapa sen que o xogador teña que tocar nada,
-  // para que siga camiñando cara ao seguinte punto. A pantalla final de
-  // "Hito superado" queda fóra desta regra a propósito.
   if (autoVolver && !accionActual && !esPantallaFinal){
     volverAlMapa();
   }
 }
-function encolarHabla(texto, botonId, esInicial){
+function encolarHabla(texto, botonId, esInicial, mapaDurante){
   if (!texto || !('speechSynthesis' in window)){
     if (esInicial) marcarBloqueInicialTerminado();
     return;
@@ -234,9 +227,20 @@ function encolarHabla(texto, botonId, esInicial){
     else { utter.lang = 'es-ES'; }
     utter.rate = 0.95;
     vocesPendientes++;
-    utter.onstart = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); } };
-    utter.onend   = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); if (esInicial) marcarBloqueInicialTerminado(); };
-    utter.onerror = () => { if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); } vozTerminada(); if (esInicial) marcarBloqueInicialTerminado(); };
+    utter.onstart = () => {
+      if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.add('hablando'); }
+      if (mapaDurante) mostrarMapaEspecial(mapaDurante);
+    };
+    utter.onend   = () => {
+      if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); }
+      if (mapaDurante) ocultarMapaEspecial();
+      vozTerminada(); if (esInicial) marcarBloqueInicialTerminado();
+    };
+    utter.onerror = () => {
+      if (botonId){ const b = document.getElementById(botonId); if (b) b.classList.remove('hablando'); }
+      if (mapaDurante) ocultarMapaEspecial();
+      vozTerminada(); if (esInicial) marcarBloqueInicialTerminado();
+    };
     speechSynthesis.speak(utter);
   }catch(e){
     vozTerminada();
@@ -247,15 +251,28 @@ function hablar(texto, botonId){
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   vocesPendientes = 0;
-  // Si alguien pulsa "Repetir" mientras aún esperábamos a que acabase la
-  // narración inicial del nodo, esa espera ya no se puede completar de
-  // forma natural (acabamos de cortarla). Para no dejar los controis
-  // bloqueados para sempre, liberámolos xa.
   if (bloquesInicialesPendientes > 0){
     bloquesInicialesPendientes = 0;
     habilitarAccion(false);
   }
-  encolarHabla(texto, botonId, false);
+  encolarHabla(texto, botonId, false, null);
+}
+
+function mostrarMapaEspecial(obj){
+  if (!obj || !mapa) return;
+  mapaEspecialActivo = obj;
+  document.getElementById('pantalla-nodo').classList.remove('activa');
+  document.getElementById('pantalla-mapa').classList.add('activa');
+  document.getElementById('instruccion').textContent = 'Segue camiñando cara a ' + obj.nombre + '...';
+  document.getElementById('zona-aviso').innerHTML = '<div class="aviso-vacio">Escoitando... continúa cara a ' + obj.nombre + '</div>';
+  setTimeout(()=>{ if(mapa) mapa.invalidateSize(); dibujarRuta(obj); }, 150);
+}
+function ocultarMapaEspecial(){
+  mapaEspecialActivo = null;
+  document.getElementById('pantalla-mapa').classList.remove('activa');
+  document.getElementById('pantalla-nodo').classList.add('activa');
+  const instr = document.getElementById('instruccion');
+  if (instr) instr.textContent = modoGPS ? 'Usando tu GPS real — camina por la ciudad' : 'Toca el mapa para moverte — simula caminar por la ciudad';
 }
 
 function guardarId(id){ try{ localStorage.setItem('orbe_resonador_id', id); }catch(e){} }
@@ -290,7 +307,7 @@ async function consultarEstado(){
     const r = await fetch(WORKER + '/estado?id=' + encodeURIComponent(resonadorId));
     const d = await r.json();
     misionActual = d.mision || 'presentacion';
-  }catch(e){ /* si falla, se queda con la última etapa conocida */ }
+  }catch(e){ }
 }
 
 function distancia(la1,ln1,la2,ln2){
@@ -335,8 +352,6 @@ function initMapa(){
   actualizar();
 }
 
-// Rumbo (0º = norte, sentido horario) desde un punto a otro — para
-// orientar la flecha de la ruta hacia el próximo nodo.
 function calcularRumbo(la1,ln1,la2,ln2){
   const toRad = g => g*Math.PI/180, toDeg = r => r*180/Math.PI;
   const f1=toRad(la1), f2=toRad(la2), dL=toRad(ln2-ln1);
@@ -345,11 +360,6 @@ function calcularRumbo(la1,ln1,la2,ln2){
   return (toDeg(Math.atan2(y,x)) + 360) % 360;
 }
 
-// Dibuja (y redibuja en cada actualización de posición) una línea de
-// puntos roja desde donde está el jugador hasta el próximo nodo, con una
-// pequeña flecha en el extremo señalando el punto exacto. Es una línea
-// recta (no sigue las calles), pensada solo como referencia visual de
-// hacia dónde tirar.
 function dibujarRuta(objetivo){
   if (!mapa) return;
   const desde = [posicion.lat, posicion.lng];
@@ -369,6 +379,12 @@ function dibujarRuta(objetivo){
 
 function actualizar(){
   if(usuarioMarker) usuarioMarker.setLatLng([posicion.lat,posicion.lng]);
+
+  if (mapaEspecialActivo){
+    dibujarRuta(mapaEspecialActivo);
+    return;
+  }
+
   const objetivoKey = OBJETIVO_POR_MISION[misionActual] || 'campillo';
 
   Object.values(NODOS).forEach(n => {
@@ -383,16 +399,6 @@ function actualizar(){
   const objetivo = NODOS[objetivoKey];
   const dObjetivo = distancia(posicion.lat,posicion.lng,objetivo.lat,objetivo.lng);
 
-  // Apertura automática: si entras en el radio del nodo que te toca (y no
-  // estás ya dentro de un nodo), se abre solo, sin que tengas que pulsar
-  // "Abrir". Solo se dispara UNA VEZ por etapa (guardado en autoAbiertoPara)
-  // para no reabrirse en bucle si te quedas parado ahí o vuelves al mapa
-  // por tu cuenta. Y si todavía está sonando la narración del nodo
-  // anterior (p. ej. el tránsito, que es largo y puede que aún no haya
-  // terminado cuando llegas caminando), NO la cortamos: se deja marcada
-  // como pendiente y se abrirá sola en cuanto esa voz calle (ver
-  // vozTerminada). Mientras tanto, el botón "Abrir" del aviso sigue
-  // disponible por si el jugador prefiere adelantarse.
   if (dObjetivo <= RADIO && nodoAbierto === null){
     const combo = misionActual + '|' + objetivoKey;
     if (autoAbiertoPara !== combo){
@@ -410,9 +416,6 @@ function actualizar(){
   pintarAviso(dObjetivo<=RADIO ? Math.round(dObjetivo) : null, objetivo);
 }
 
-// Mientras la narración de llegada a un nodo está pendiente de sonar (o
-// sonando), no se ofrece forma de adelantarse: ni botón "Abrir" en el
-// aviso, ni marcador tocable en el mapa. Así nunca se pierde historia.
 function esperandoNarracionDe(nodoKey){
   return vocesPendientes > 0 && autoAperturaPendiente === (misionActual + '|' + nodoKey);
 }
@@ -431,6 +434,7 @@ function pintarAviso(dist, objetivo){
 }
 
 function intentarAbrir(nodoKey){
+  if (mapaEspecialActivo) return;
   if (esperandoNarracionDe(nodoKey)){
     const z=document.getElementById('zona-aviso');
     z.innerHTML='<div class="aviso-vacio">Agarda un intre... está a rematar de falar</div>';
@@ -469,6 +473,7 @@ async function abrirNodo(nodoKey){
   accionActual = null;
   esPantallaFinal = false;
   opcionesActuales = [];
+  mapaEspecialActivo = null;
 
   try{
     const r = await fetch(WORKER + '/nodo-activo?id=' + encodeURIComponent(resonadorId) + '&nodo=' + encodeURIComponent(nodoKey));
@@ -486,10 +491,6 @@ async function abrirNodo(nodoKey){
         '<p class="texto-cuerpo">' + escapar(b.texto) + '</p></div>';
     });
 
-    // Mientras los bloques de texto de este nodo aún no han terminado de
-    // sonar, el micrófono y los nombres se muestran desactivados: primero
-    // se escucha, luego se actúa. En cuanto acaban (marcarBloqueInicialTerminado
-    // llega a 0), habilitarAccion() los activa solo, sin recargar nada.
     const bloqueado = (d.bloques || []).length > 0;
     if (d.accion && d.accion.tipo === 'nombre'){
       const todos = [...d.accion.nombres.mujer, ...d.accion.nombres.hombre];
@@ -521,23 +522,20 @@ async function abrirNodo(nodoKey){
       '</div>';
       accionActual = { tipo: 'mic' };
     } else if (d.final){
-      html += '<div class="ok-box">Hito 6 superado: Misión 1 completada con el guion real, en un nodo distinto al de la Presentación.</div>';
+      html += '<div class="ok-box">Hito 7 superado: Misións 2 e 3 completadas (Xudería e Praza do Peirao) co guion real.</div>';
       esPantallaFinal = true;
     }
 
     cont.innerHTML = html;
 
-    // Mientras habla el propio nodo, tampoco se puede escapar hacia el mapa:
-    // así no hay ningún atajo (ni micrófono, ni nombres, ni "Volver al
-    // mapa") que permita perderse la narración que se acaba de abrir.
     const btnVolver = document.getElementById('btn-volver');
     if (btnVolver) btnVolver.disabled = bloqueado;
 
     speechSynthesis.cancel();
     vocesPendientes = 0;
-    autoAperturaPendiente = null; // este nodo ya se abrió; cualquier espera anterior queda obsoleta
+    autoAperturaPendiente = null;
     bloquesInicialesPendientes = (d.bloques || []).length;
-    (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i, true));
+    (d.bloques || []).forEach((b, i) => encolarHabla(b.texto, 'btn-oir-' + i, true, b.mapaDurante || null));
   }catch(e){
     cont.innerHTML = '<div class="error-box">Non se puido contactar co Worker. Comproba a túa conexión e inténtao de novo.</div>';
   }
@@ -585,11 +583,6 @@ async function procesarAudioGrabado(){
         if (estadoVoz) estadoVoz.textContent = 'Non recoñecín ningún nome' + (j.texto_oido ? ' ("' + j.texto_oido + '")' : '') + '. Proba outra vez ou toca un nome.';
       }
     } else {
-      // Acción de micrófono con opciones: no basta con que se oiga
-      // cualquier cosa — tiene que reconocerse alguna de las palabras
-      // clave de alguna opción (p. ej. "Saúl" o "porto"). Si no se
-      // reconoce ninguna, no se avanza solo; se avisa de que toque el
-      // botón de la opción a mano.
       const textoOido = j.texto_oido || '';
       if (opcionesActuales.length > 0){
         const normalizado = quitarAcentos(textoOido.toLowerCase());
@@ -627,11 +620,6 @@ async function ejecutarAccion(tipo, valor){
       return;
     }
     misionActual = j.estado.mision;
-    // Siempre nos quedamos en el mismo nodo mostrando lo que toca a
-    // continuación (aunque el próximo objetivo esté en otro sitio):
-    // así nunca nos saltamos texto del guion. El jugador vuelve al
-    // mapa él mismo, con el botón "Volver al mapa", cuando ya leyó/oyó
-    // todo y le toca caminar a otro nodo.
     if (nodoAbierto){
       abrirNodo(nodoAbierto);
     } else {
